@@ -13,7 +13,6 @@ BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HA
 
 # --- AUTOMATICKÁ DETEKCE JAZYKA PŘES HLAVIČKY PROHLÍŽEČE ---
 try:
-    # Streamlit vytáhne jazyk přímo z prohlížeče (např. "cs-CZ,cs;q=0.9...")
     accept_language = st.context.headers.get("Accept-Language", "en")
     user_lang = accept_language.split(",")[0].split("-")[0].lower().strip()
 except:
@@ -29,7 +28,7 @@ LANG_DICT = {
         "thinking": "Koregis přemýšlí...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu."
+        "error_api": "⚠️ Bohužel nemohu odpovědět. Servery jsou momentálně zatížené, chyba není na naší straně. Zkuste to prosím znovu později."
     },
     "sk": {
         "welcome_title": "Koregis AI",
@@ -39,7 +38,7 @@ LANG_DICT = {
         "thinking": "Koregis premýšľa...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Všetky dostupné API kľúče sú momentálne preťažené limitmi alebo majú výpadok u Googlu. Počakaj prosím minútu."
+        "error_api": "⚠️ Bohužiaľ nemôžem odpovedať. Servery sú momentálne preťažené, chyba nie je na našej strane. Skúste to prosím znovu neskôr."
     },
     "en": {
         "welcome_title": "Koregis AI",
@@ -49,7 +48,7 @@ LANG_DICT = {
         "thinking": "Koregis is thinking...",
         "new_chat": "New chat",
         "chat_prefix": "New Chat",
-        "error_api": "⚠️ All available API keys are currently exhausted by Google limits or experiencing an outage. Please wait a minute."
+        "error_api": "⚠️ Unfortunately, I cannot respond. The servers are currently overloaded, the error is not on our side. Please try again later."
     },
     "de": {
         "welcome_title": "Koregis AI",
@@ -59,11 +58,10 @@ LANG_DICT = {
         "thinking": "Koregis denkt nach...",
         "new_chat": "Neuer Chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Alle verfügbaren API-Schlüssel sind derzeit durch Google-Limits erschöpft oder weisen einen Ausfall auf. Bitte warte eine Minute."
+        "error_api": "⚠️ Leider kann ich nicht antworten. Die Server sind derzeit überlastet, der Fehler liegt nicht auf unserer Seite. Bitte versuche es später noch einmal."
     }
 }
 
-# Pokud jazyk v seznamu nemáme, skočí jako základní angličtina
 current_lang = LANG_DICT.get(user_lang, LANG_DICT["en"])
 
 # --- DYNAMICKÝ SYSTEM PROMPT S OBRANOU PROTI NADÁVKÁM ---
@@ -80,7 +78,7 @@ SYSTEM_PROMPT = (
     f"If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
 )
 
-# --- CSS PRO PERFEKTNÍ POZICOVÁNÍ A VELIKOST ---
+# --- CSS STYLY ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { 
@@ -167,7 +165,7 @@ st.markdown("""
 if "chats" not in st.session_state: st.session_state.chats = {}
 if "current_chat" not in st.session_state: st.session_state.current_chat = None
 
-# Načtení a zakódování log
+# Načtení logů do Base64
 logo_base64 = ""
 if os.path.exists("koregis_logo.png"):
     with open("koregis_logo.png", "rb") as image_file:
@@ -200,7 +198,6 @@ with st.sidebar:
             st.session_state.current_chat = chat_name
             st.rerun()
 
-    # Patička s logem a informacemi
     footer_html = '<div class="sidebar-footer-container">'
     footer_html += '<div class="footer-line"></div>'
     footer_html += '<div class="footer-dev-row">'
@@ -216,16 +213,12 @@ with st.sidebar:
     st.markdown(footer_html, unsafe_allow_html=True)
 
 
-# --- HLAVNÍ FUNKCE PRO ROTACI API KLÍČŮ ---
+# --- FUNKCE PRO ROTACI API KLÍČŮ (VYBÍRÁ POUZE DOSUD NEVYČERPANÉ KLÍČE) ---
 def get_gemini_client(exclude_keys=[]):
     raw_keys = st.secrets.get("GEMINI_API_KEYS", st.secrets.get("GEMINI_API_KEY", ""))
     all_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
     available_keys = [k for k in all_keys if k not in exclude_keys]
     
-    if not available_keys:
-        exclude_keys.clear()
-        available_keys = all_keys
-        
     if not available_keys:
         return None, None
         
@@ -233,7 +226,7 @@ def get_gemini_client(exclude_keys=[]):
     return genai.Client(api_key=chosen_key), chosen_key
 
 
-# --- RENDER STRÁNKY S DYNAMICKÝM JAZYKEM ---
+# --- RENDER STRÁNKY ---
 if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
@@ -253,7 +246,7 @@ else:
             with st.chat_message("user", avatar=BLANK_AVATAR):
                 st.markdown(msg["content"])
 
-# Vstupní textové pole
+# Vstupní pole chatu
 if prompt := st.chat_input(current_lang["placeholder"]):
     if st.session_state.current_chat is None:
         st.session_state.current_chat = "Temp"
@@ -285,20 +278,24 @@ if prompt := st.chat_input(current_lang["placeholder"]):
     with st.chat_message("assistant", avatar=avatar_ai):
         with st.spinner(current_lang["thinking"]):
             
-            failed_keys = []
+            failed_keys = []  # Seznam klíčů, které totálně selhaly (všech 5 pokusů vyčerpáno)
             success = False
+            full_text = ""
             
+            # CHYTRÝ ROTATOR S LIMITACÍ 5 POKUSŮ NA JEDNOM API
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
+                # Pokud už nezbývají ŽÁDNÉ API klíče, které by nebyly vyčerpané
                 if not client:
-                    time.sleep(2)
-                    continue
+                    st.warning(current_lang["error_api"])
+                    st.stop()
                 
                 key_attempts = 0
                 key_success = False
                 
-                while key_attempts < 3 and not key_success:
+                # Zkusí to přesně 5x na aktuálním klíči
+                while key_attempts < 5 and not key_success:
                     try:
                         chat_session = client.chats.create(
                             model="gemini-2.5-flash",
@@ -314,17 +311,21 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                         st.markdown(full_text)
                         
                         key_success = True
-                        success = True 
+                        success = True  # Vše proběhlo v pořádku, ukončujeme cykly
                         
                     except Exception as e:
                         err_msg = str(e)
+                        # Detekce limitu 15-20 ot./min (chyby 429, RESOURCE_EXHAUSTED apod.)
                         if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                             key_attempts += 1
-                            if key_attempts < 3:
-                                time.sleep(2)
+                            if key_attempts < 5:
+                                # Klíč počká 4 sekundy a zkusí to znova (celkem max 5x)
+                                time.sleep(4)
                             else:
+                                # Po 5. neúspěšném pokusu klíč zablokujeme pro tento request a smyčka ho přepne na jiný
                                 failed_keys.append(current_key)
                         else:
+                            # Jakákoli jiná kritická chyba (např. špatný formát kódu) aplikaci zastaví
                             st.error(f"Error: {e}")
                             st.stop()
             
