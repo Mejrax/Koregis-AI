@@ -35,23 +35,44 @@ def get_ai_response(history, system_instr):
         config={"system_instruction": system_instr}
     )
 
-# --- SIDEBAR LOGIKA ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
-    if os.path.exists("koregis_logo.png"):
-        st.image("koregis_logo.png", width=30)
-    st.markdown('<span>Koregis AI</span></div>', unsafe_allow_html=True)
+    # Čistý kontejner pro logo a název vedle sebe
+    st.markdown("""
+        <style>
+        .custom-sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .custom-title {
+            color: #000000;
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+        </style>
+        <div class="custom-sidebar-header">
+            <img src="app/static/koregis_logo.png" width="28">
+            <h2 class="custom-title">Koregis AI</h2>
+        </div>
+    """, unsafe_allow_html=True)
 
-    if st.button("✍️ Nový chat", use_container_width=True):
+    # Tlačítko pro nový chat - bez zbytečných ikon, pokud chceš minimalistický vzhled
+    if st.button("Nový chat", use_container_width=True):
         new_id = len(st.session_state.chats) + 1
-        new_name = f"Chat {new_id}"
+        new_name = f"Nový chat {new_id}"
         st.session_state.chats[new_name] = {"history": [], "raw": []}
         st.session_state.current_chat = new_name
         st.rerun()
 
     st.write("---")
+    
+    # Seznam chatů
     for chat_name in list(st.session_state.chats.keys()):
-        if st.sidebar.button(chat_name, use_container_width=True):
+        # Použití key=chat_name zajistí, že Streamlit pozná, na které tlačítko klikáš
+        if st.button(chat_name, use_container_width=True, key=chat_name):
             st.session_state.current_chat = chat_name
             st.rerun()
 
