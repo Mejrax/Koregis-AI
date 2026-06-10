@@ -7,10 +7,10 @@ import random
 # Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
-# Transparentní 1x1 px PNG pro skrytí uživatelského avataru (odzkoušené, stabilní)
+# Transparentní 1x1 px PNG pro skrytí uživatelského avataru
 BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
-# --- CSS PRO SPRÁVNÝ DARK MODE, ZAROVNÁNÍ A SMAZÁNÍ PRÁZDNÉHO MÍSTA ---
+# --- CSS PRO SPRÁVNÝ DARK MODE, ZAROVNÁNÍ A FIXNÍ PATIČKU ---
 st.markdown("""
     <style>
     /* Pozadí a ohraničení sidebaru */
@@ -19,6 +19,18 @@ st.markdown("""
         border-right: 1px solid var(--secondary-background-color);
     }
     
+    /* Vnitřní kontejner sidebaru, abychom mohli patičku tlačit dolů */
+    [data-testid="stSidebarUserContent"] {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    
+    /* Tento prvek zabere veškeré volné místo a odtlačí patičku dolů */
+    .sidebar-flex-spacer {
+        flex-grow: 1;
+    }
+
     /* Design tlačítek v sidebaru */
     .stButton>button { 
         border: 1px solid var(--secondary-background-color); 
@@ -47,6 +59,40 @@ st.markdown("""
         line-height: 1 !important; 
     }
 
+    /* --- STYL PRO PATIČKU V LEVÉM DOLNÍM ROHU --- */
+    .sidebar-footer-container {
+        padding-top: 15px;
+        margin-top: 15px;
+        margin-bottom: 30px;
+        padding-left: 5px;
+        font-size: 13px;
+        color: var(--text-color);
+        opacity: 0.8;
+        line-height: 1.4;
+    }
+    .footer-dev-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-weight: 500;
+    }
+    .footer-dev-logo {
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+        border-radius: 50%;
+    }
+    .footer-version {
+        font-size: 12px;
+        opacity: 0.6;
+    }
+    .footer-powered {
+        font-size: 11px;
+        opacity: 0.5;
+        font-style: italic;
+    }
+
     /* --- SKRYTÍ VOLNÉHO MÍSTA PO UŽIVATELSKÉM AVATARU --- */
     div[data-testid="stChatMessageAvatar"]:has(img[src*="iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"]) {
         display: none !important;
@@ -71,17 +117,28 @@ SYSTEM_PROMPT = (
     "If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
 )
 
+# Načtení a zakódování hlavního loga (Koregis AI)
+logo_base64 = ""
+if os.path.exists("koregis_logo.png"):
+    with open("koregis_logo.png", "rb") as image_file:
+        logo_base64 = base64.b64encode(image_file.read()).decode()
+
+# Načtení a zakódování loga vývojáře (dev_mejrax.png)
+dev_logo_base64 = ""
+if os.path.exists("dev_mejrax.png"):
+    with open("dev_mejrax.png", "rb") as image_file:
+        dev_logo_base64 = base64.b64encode(image_file.read()).decode()
+
 # --- SIDEBAR ---
 with st.sidebar:
+    # Hlavička sidebaru (Koregis AI)
     header_html = '<div class="sidebar-header-container">'
-    if os.path.exists("koregis_logo.png"):
-        with open("koregis_logo.png", "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode()
-        header_html += f'<img src="data:image/png;base64,{encoded_string}" class="sidebar-logo">'
+    if logo_base64:
+        header_html += f'<img src="data:image/png;base64,{logo_base64}" class="sidebar-logo">'
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
-    
     st.markdown(header_html, unsafe_allow_html=True)
 
+    # Tlačítko pro nový chat
     if st.button("Nový chat"):
         new_id = len(st.session_state.chats) + 1
         new_name = f"Chat {new_id}"
@@ -91,20 +148,37 @@ with st.sidebar:
 
     st.write("---")
     
+    # Seznam chatů
     for chat_name in list(st.session_state.chats.keys()):
         if st.button(chat_name, key=chat_name):
             st.session_state.current_chat = chat_name
             st.rerun()
+
+    # --- PUSH ELEMENT A PATIČKA ---
+    st.markdown('<div class="sidebar-flex-spacer"></div>', unsafe_allow_html=True)
+    st.write("---")
+    
+    # Sestavení HTML pro patičku s logem dev_mejrax.png
+    footer_html = '<div class="sidebar-footer-container">'
+    footer_html += '<div class="footer-dev-row">'
+    if dev_logo_base64:
+        footer_html += f'<img src="data:image/png;base64,{dev_logo_base64}" class="footer-dev-logo">'
+    elif logo_base64:
+        # Fallback pokud by dev_mejrax.png chyběl, použije se hlavní logo
+        footer_html += f'<img src="data:image/png;base64,{logo_base64}" class="footer-dev-logo">'
+    footer_html += 'Developer Mejrax</div>'
+    footer_html += '<div class="footer-version">Koregis - 1.0</div>'
+    footer_html += '<div class="footer-powered">Powered By Google</div>'
+    footer_html += '</div>'
+    
+    st.markdown(footer_html, unsafe_allow_html=True)
 
 
 # --- HLAVNÍ FUNKCE PRO ROTACI API KLÍČŮ ---
 def get_gemini_client(exclude_keys=[]):
     """Načte seznam klíčů ze secrets a vybere náhodný, který ještě neselhal."""
     raw_keys = st.secrets.get("GEMINI_API_KEYS", st.secrets.get("GEMINI_API_KEY", ""))
-    
-    # Rozsekáme klíče podle čárek a vyčistíme mezery
     all_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
-    # Vyfiltrujeme ty, které v aktuálním průchodu selhaly na limit 429
     available_keys = [k for k in all_keys if k not in exclude_keys]
     
     if not available_keys:
@@ -173,7 +247,6 @@ if prompt := st.chat_input("Ask Koregis..."):
             failed_keys = []
             success = False
             
-            # Smyčka zkouší klíče, dokud jeden neuspěje nebo dokud nedojdou
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
@@ -191,18 +264,15 @@ if prompt := st.chat_input("Ask Koregis..."):
                     resp = chat_session.send_message(prompt)
                     full_text = resp.text
                     
-                    # Uložení stavu zpět do historie
                     active_chat["api_history"] = chat_session.get_history()
                     active_chat["history"].append({"role": "assistant", "content": full_text})
                     st.markdown(full_text)
                     success = True 
                     
                 except Exception as e:
-                    # Pokud je to chyba zahlcení (429), vyřadíme klíč pro tento průchod a zkusíme jiný
                     if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                         failed_keys.append(current_key)
                     else:
-                        # Pokud je to jiná chyba (např. neplatný klíč), vypíšeme ji a zastavíme aplikaci
                         st.error(f"Chyba API: {e}")
                         st.stop()
             
