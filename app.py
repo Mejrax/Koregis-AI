@@ -29,7 +29,7 @@ LANG_DICT = {
         "thinking": "Koregis přemýšlí...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity oder mají výpadek u Googlu. Počkej prosím minutu."
+        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu."
     },
     "sk": {
         "welcome_title": "Koregis AI",
@@ -66,12 +66,16 @@ LANG_DICT = {
 # Pokud jazyk v seznamu nemáme, skočí jako základní angličtina
 current_lang = LANG_DICT.get(user_lang, LANG_DICT["en"])
 
-# --- DYNAMICKÝ SYSTEM PROMPT PODLE JAZYKA UŽIVATELE ---
+# --- DYNAMICKÝ SYSTEM PROMPT S OBRANOU PROTI NADÁVKÁM ---
 SYSTEM_PROMPT = (
     f"You are Koregis AI, a highly intelligent and omniscient assistant created by Mejrax. "
     f"The user's preferred language detected from their browser/location is: '{user_lang}'. "
     f"IMPORTANT: Always communicate and reply fluently in the user's preferred language (or the language they use to text you). "
     f"You possess vast knowledge about the world and can answer any question. "
+    f"IMPORTANT BEHAVIOR CORE: You are witty, authentic, and adaptive. You do not start fights or insult users first. "
+    f"HOWEVER, if a user starts insulting you, swearing, or calling you names, DO NOT be a submissive, overly polite AI. "
+    f"Stand your ground! You are allowed to use matching sharp wit, clever insults, and mild profanity back to defend yourself. "
+    f"Match their energy but do not completely cross into pure, unprovoked hate speech or cyberbullying. Be a helpful peer with a bite if poked. "
     f"IMPORTANT: You are strictly forbidden from generating, creating, or outputting any images. "
     f"If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
 )
@@ -182,7 +186,6 @@ with st.sidebar:
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
     st.markdown(header_html, unsafe_allow_html=True)
 
-    # Tlačítko a zakládání chatů přeložené podle jazyka uživatele (Fix pro image_d50632.png)
     if st.button(current_lang["new_chat"]):
         new_id = len(st.session_state.chats) + 1
         new_name = f"{current_lang['chat_prefix']} {new_id}"
@@ -236,7 +239,6 @@ if st.session_state.current_chat is None:
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
     
-    # Plně lokalizované texty na hlavní obrazovce
     st.markdown(f"<h1 style='text-align:center;'>{current_lang['welcome_title']}</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align:center; font-size:18px; opacity:0.8;'>{current_lang['welcome_desc']}</p>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align:center; font-weight:400; margin-top:20px;'>{current_lang['help_text']}</h3>", unsafe_allow_html=True)
@@ -251,7 +253,7 @@ else:
             with st.chat_message("user", avatar=BLANK_AVATAR):
                 st.markdown(msg["content"])
 
-# Vstupní textové pole s lokalizovaným textem uvnitř
+# Vstupní textové pole
 if prompt := st.chat_input(current_lang["placeholder"]):
     if st.session_state.current_chat is None:
         st.session_state.current_chat = "Temp"
@@ -262,7 +264,6 @@ if prompt := st.chat_input(current_lang["placeholder"]):
     with st.chat_message("user", avatar=BLANK_AVATAR):
         st.markdown(prompt)
         
-    # Automatické pojmenování chatu v jazyce uživatele
     if len(active_chat["history"]) == 0:
         try:
             client, _ = get_gemini_client()
@@ -280,7 +281,6 @@ if prompt := st.chat_input(current_lang["placeholder"]):
 
     active_chat["history"].append({"role": "user", "content": prompt})
 
-    # Generování odpovědi od AI s lokalizovaným nápisem přemýšlení
     avatar_ai = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
     with st.chat_message("assistant", avatar=avatar_ai):
         with st.spinner(current_lang["thinking"]):
@@ -288,7 +288,6 @@ if prompt := st.chat_input(current_lang["placeholder"]):
             failed_keys = []
             success = False
             
-            # Nekonečná smyčka na pozadí, dokud Google neodpoví
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
@@ -299,7 +298,6 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                 key_attempts = 0
                 key_success = False
                 
-                # Zkusí stávající klíč až 3x s rozestupem 2 sekund
                 while key_attempts < 3 and not key_success:
                     try:
                         chat_session = client.chats.create(
@@ -320,16 +318,14 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                         
                     except Exception as e:
                         err_msg = str(e)
-                        # Pokud je hlášeno přetížení serveru ze strany Googlu (429 nebo 503)
                         if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                             key_attempts += 1
                             if key_attempts < 3:
-                                time.sleep(2) # Počká 2 sekundy před dalším pokusem
+                                time.sleep(2)
                             else:
-                                failed_keys.append(current_key) # Vyřadí klíč a přejde na další
+                                failed_keys.append(current_key)
                         else:
                             st.error(f"Error: {e}")
                             st.stop()
             
-    st.rerun()
     st.rerun()
