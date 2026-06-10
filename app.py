@@ -28,7 +28,8 @@ LANG_DICT = {
         "placeholder": "Zeptej se Koregise...",
         "thinking": "Koregis přemýšlí...",
         "new_chat": "Nový chat",
-        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu."
+        "chat_prefix": "Chat",
+        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity oder mají výpadek u Googlu. Počkej prosím minutu."
     },
     "sk": {
         "welcome_title": "Koregis AI",
@@ -37,6 +38,7 @@ LANG_DICT = {
         "placeholder": "Spýtaj se Koregisa...",
         "thinking": "Koregis premýšľa...",
         "new_chat": "Nový chat",
+        "chat_prefix": "Chat",
         "error_api": "⚠️ Všetky dostupné API kľúče sú momentálne preťažené limitmi alebo majú výpadok u Googlu. Počakaj prosím minútu."
     },
     "en": {
@@ -46,6 +48,7 @@ LANG_DICT = {
         "placeholder": "Ask Koregis...",
         "thinking": "Koregis is thinking...",
         "new_chat": "New chat",
+        "chat_prefix": "New Chat",
         "error_api": "⚠️ All available API keys are currently exhausted by Google limits or experiencing an outage. Please wait a minute."
     },
     "de": {
@@ -55,6 +58,7 @@ LANG_DICT = {
         "placeholder": "Frag Koregis...",
         "thinking": "Koregis denkt nach...",
         "new_chat": "Neuer Chat",
+        "chat_prefix": "Chat",
         "error_api": "⚠️ Alle verfügbaren API-Schlüssel sind derzeit durch Google-Limits erschöpft oder weisen einen Ausfall auf. Bitte warte eine Minute."
     }
 }
@@ -178,10 +182,10 @@ with st.sidebar:
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
     st.markdown(header_html, unsafe_allow_html=True)
 
-    # Tlačítko přeložené podle jazyka uživatele
+    # Tlačítko a zakládání chatů přeložené podle jazyka uživatele (Fix pro image_d50632.png)
     if st.button(current_lang["new_chat"]):
         new_id = len(st.session_state.chats) + 1
-        new_name = f"Chat {new_id}"
+        new_name = f"{current_lang['chat_prefix']} {new_id}"
         st.session_state.chats[new_name] = {"history": [], "api_history": []}
         st.session_state.current_chat = new_name
         st.rerun()
@@ -327,4 +331,5 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                             st.error(f"Error: {e}")
                             st.stop()
             
+    st.rerun()
     st.rerun()
