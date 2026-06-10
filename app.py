@@ -1,121 +1,101 @@
 import streamlit as st
 import google.genai as genai
 import os
-import logging
 
-# Nastavení logování pro lepší debugování
-logging.basicConfig(level=logging.INFO)
-
-# 1. Konfigurace stránky
+# Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
-# 2. Robustní CSS struktura
-def inject_custom_css():
-    st.markdown("""
-        <style>
-        [data-testid="stSidebar"] { background-color: #f8fafd; }
-        .stApp { background-color: #ffffff; }
-        .logo-container { display: flex; align-items: center; gap: 12px; margin: 15px 0; }
-        .new-chat-btn { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; }
-        </style>
-    """, unsafe_allow_html=True)
+# CSS pro vzhled
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { background-color: #f8fafd; }
+    .stApp { background-color: #ffffff; }
+    .stButton>button { border: 1px solid #e0e0e0; border-radius: 8px; width: 100%; text-align: left; }
+    </style>
+""", unsafe_allow_html=True)
 
-inject_custom_css()
-
-# 3. Inicializace stavu aplikace
+# Inicializace stavu
 if "chats" not in st.session_state: st.session_state.chats = {}
 if "current_chat" not in st.session_state: st.session_state.current_chat = None
 
-# 4. Funkce pro práci s modelem
-def get_ai_response(history, system_instr):
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-    return client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=history,
-        config={"system_instruction": system_instr}
-    )
+# --- SYSTÉMOVÁ INSTRUKCE (Základní nastavení AI) ---
+SYSTEM_PROMPT = (
+    "You are Koregis AI, a highly intelligent and omniscient assistant created by Mejrax. "
+    "You are capable of communicating fluently in any language. "
+    "You possess vast knowledge about the world and can answer any question. "
+    "IMPORTANT: You are strictly forbidden from generating, creating, or outputting any images. "
+    "If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
+)
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # Kontejner pro logo a text
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-            <img src="https://raw.githubusercontent.com/tvoje-repo/cesta-k-logu/koregis_logo.png" width="30">
-            <span style="color: #000000; font-size: 20px; font-weight: 600;">Koregis AI</span>
-        </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if os.path.exists("koregis_logo.png"):
+            st.image("koregis_logo.png", width=30)
+    with col2:
+        st.markdown('<p style="color:black; font-size:20px; font-weight:600; margin-top:5px;">Koregis AI</p>', unsafe_allow_html=True)
 
-    # Tlačítko pro nový chat - stylizované tak, aby sedělo k designu
-    if st.button("✍️ Nový chat", use_container_width=True):
-        # ... tvoje logika pro nový chat ...
-        st.rerun()
-
-    st.write("---")
-    
-    # Tlačítko pro nový chat
-    if st.button("Nový chat", use_container_width=True):
-        new_id = len(st.session_state.get("chats", {})) + 1
-        new_name = f"Nový chat {new_id}"
-        if "chats" not in st.session_state: st.session_state.chats = {}
+    if st.button("Nový chat"):
+        new_id = len(st.session_state.chats) + 1
+        new_name = f"Chat {new_id}"
         st.session_state.chats[new_name] = {"history": [], "raw": []}
         st.session_state.current_chat = new_name
         st.rerun()
-    
-    # Seznam chatů
+
+    st.write("---")
     for chat_name in list(st.session_state.chats.keys()):
-        # Použití key=chat_name zajistí, že Streamlit pozná, na které tlačítko klikáš
-        if st.button(chat_name, use_container_width=True, key=chat_name):
+        if st.button(chat_name, key=chat_name):
             st.session_state.current_chat = chat_name
             st.rerun()
 
 # --- HLAVNÍ LOGIKA ---
-if not st.session_state.current_chat:
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
     st.markdown("<h1 style='text-align:center;'>How can I help you today?</h1>", unsafe_allow_html=True)
 else:
-    # Vykreslení historie
     active_chat = st.session_state.chats[st.session_state.current_chat]
     for msg in active_chat["history"]:
-        avatar = "koregis_logo.png" if (msg["role"] == "assistant" and os.path.exists("koregis_logo.png")) else None
+        avatar = "koregis_logo.png" if msg["role"] == "assistant" else None
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
 
 # Vstupní pole
 if prompt := st.chat_input("Ask Koregis..."):
-    if not st.session_state.current_chat:
-        st.session_state.current_chat = "Nový chat"
-        st.session_state.chats["Nový chat"] = {"history": [], "raw": []}
+    if st.session_state.current_chat is None:
+        st.session_state.current_chat = "Temp"
+        st.session_state.chats["Temp"] = {"history": [], "raw": []}
     
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
-    # 1. Přidání uživatelského vstupu
-    active_chat["history"].append({"role": "user", "content": prompt})
-    active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
-    
-    # 2. Přejmenování při prvním dotazu
-    if len(active_chat["history"]) == 1:
+    # Automatické pojmenování
+    if len(active_chat["history"]) == 0:
         try:
-            name_resp = get_ai_response(f"Název pro: {prompt}", "Odpověz pouze krátkým názvem.")
-            new_title = name_resp.text.strip().replace('"', '')
+            resp = client.models.generate_content(model="gemini-2.5-flash", contents=f"Name this chat: '{prompt}'. Max 3 words.")
+            new_title = resp.text.strip().replace('"', '')
             st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
             st.session_state.current_chat = new_title
             active_chat = st.session_state.chats[new_title]
-        except Exception as e:
-            logging.error(f"Chyba při přejmenování: {e}")
+        except: pass
 
-    # 3. Získání odpovědi
+    active_chat["history"].append({"role": "user", "content": prompt})
+    active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
+    
     with st.chat_message("assistant", avatar="koregis_logo.png" if os.path.exists("koregis_logo.png") else None):
-        placeholder = st.empty()
         try:
-            resp = get_ai_response(active_chat["raw"], "You are Koregis AI. Created by Mejrax.")
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash", 
+                contents=active_chat["raw"], 
+                config={"system_instruction": SYSTEM_PROMPT}
+            )
             full_text = resp.text
             active_chat["history"].append({"role": "assistant", "content": full_text})
             active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
-            placeholder.markdown(full_text)
+            st.markdown(full_text)
         except Exception as e:
-            logging.error(f"Chyba AI: {e}")
-            placeholder.error("Omlouvám se, došlo k chybě při generování odpovědi.")
-    
+            st.error("Chyba API.")
     st.rerun()
