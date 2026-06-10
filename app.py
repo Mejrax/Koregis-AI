@@ -22,7 +22,7 @@ with col1:
     if os.path.exists("koregis_logo.png"):
         st.image("koregis_logo.png", width=40)
 with col2:
-    st.markdown("<h2 style='font-weight: 500; margin-top: 5px;'>Koregis AI</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight: 500; margin-top: 2px; margin-bottom: 0px;'>Koregis AI</h2>", unsafe_allow_html=True)
 
 st.sidebar.write("<br>", unsafe_allow_html=True)
 
@@ -53,7 +53,6 @@ if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    # Čistý text bez Mejrax
     st.markdown("<h1 style='text-align:center; font-weight:400; color: #444;'>How can I help you today?</h1>", unsafe_allow_html=True)
 else:
     active_chat = st.session_state.chats[st.session_state.current_chat]
