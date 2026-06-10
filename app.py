@@ -262,11 +262,13 @@ if prompt := st.chat_input(current_lang["placeholder"]):
         try:
             client, _ = get_gemini_client()
             if client:
-                # Vypnutí AFC pomocí validního slovníku
+                # OPRAVENO: Správný formát konfigurace pro automatické generování názvu chatu
                 resp = client.models.generate_content(
                     model="gemini-2.5-flash", 
                     contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt.",
-                    config=types.GenerateContentConfig(automatic_function_calling={"disable": True})
+                    config=types.GenerateContentConfig(
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    )
                 )
                 new_title = resp.text.strip().replace('"', '')
                 st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
@@ -294,13 +296,13 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                     st.stop()
                 
                 try:
-                    # Inicializace chat session s vypnutým AFC
+                    # OPRAVENO: Správný konfigurační objekt přes Pydantic pro chat_session
                     chat_session = client.chats.create(
                         model="gemini-2.5-flash",
                         history=active_chat["api_history"],
                         config=types.GenerateContentConfig(
                             system_instruction=SYSTEM_PROMPT,
-                            automatic_function_calling={"disable": True}
+                            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                         )
                     )
                     
@@ -315,12 +317,21 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                     
                 except Exception as e:
                     err_msg = str(e).upper()
-                    # Pokud klíč dostane limit nebo servery haprují, okamžitě ho zablokujeme a jedeme dál
-                    if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "QUOTA_EXCEEDED"]):
+                    
+                    # Pokud se jedná o bezpečnostní stopku (Safety), model odmítne odpovědět, ale kód kvůli tomu nesmí zahodit klíč!
+                    if "SAFETY" in err_msg or "BLOCKED" in err_msg:
+                        st.error("⚠️ Zpráva byla zablokována bezpečnostními filtry Google Gemini API.")
+                        # Přidáme aspoň zprávu do historie, aby se aplikace nezasekla
+                        active_chat["history"].append({"role": "assistant", "content": "Zpráva zablokována bezpečnostní pojistkou."})
+                        success = True
+                    
+                    # Pokud klíč dostane reálný limit (přetížení), okamžitě ho zablokujeme a jedeme na další klíč
+                    elif any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "QUOTA_EXCEEDED"]):
                         failed_keys.append(current_key)
+                        
                     else:
-                        # Pokud nastane jiná (vývojová) chyba, vypíše se, abyste viděli co upravit, a zkusí se další klíč
-                        st.error(f"Neočekávaná chyba u klíče: {e}")
+                        # Pokud nastane jakákoliv jiná neočekávaná chyba, vypíšeme ji a zkusíme jiný klíč
+                        st.error(f"Chyba API u klíče: {e}")
                         failed_keys.append(current_key)
             
     st.rerun()
