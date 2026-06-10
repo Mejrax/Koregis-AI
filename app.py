@@ -29,7 +29,7 @@ LANG_DICT = {
         "thinking": "Koregis přemýšlí...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Bohužel nemohu odpovědět. Servery jsou momentálně zatížené, chyby není na naší straně. Zkuste to prosím znovu později."
+        "error_api": "⚠️ Bohužel nemohu odpovědět. Všechny dostupné API klíče jsou momentálně přetížené nebo vyčerpané. Zkuste to prosím znovu za chvíli."
     },
     "sk": {
         "welcome_title": "Koregis AI",
@@ -39,7 +39,7 @@ LANG_DICT = {
         "thinking": "Koregis premýšľa...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Bohužiaľ nemôžem odpovedať. Servery sú momentálne preťažené, chyba nie je na našej strane. Skúste to prosím znovu neskôr."
+        "error_api": "⚠️ Bohužiaľ nemôžem odpovedať. Všetky dostupné API kľúče sú momentálne preťažené alebo vyčerpané. Skúste to prosím znovu o chvíľu."
     },
     "en": {
         "welcome_title": "Koregis AI",
@@ -49,7 +49,7 @@ LANG_DICT = {
         "thinking": "Koregis is thinking...",
         "new_chat": "New chat",
         "chat_prefix": "New Chat",
-        "error_api": "⚠️ Unfortunately, I cannot respond. The servers are currently overloaded, the error is not on our side. Please try again later."
+        "error_api": "⚠️ Unfortunately, I cannot respond. All available API keys are currently overloaded or exhausted. Please try again in a moment."
     },
     "de": {
         "welcome_title": "Koregis AI",
@@ -59,7 +59,7 @@ LANG_DICT = {
         "thinking": "Koregis denkt nach...",
         "new_chat": "Neuer Chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Leider kann ich nicht antworten. Die Server sind derzeit überlastet, der Fehler liegt nicht auf unserer Seite. Bitte versuche es später noch einmal."
+        "error_api": "⚠️ Leider kann ich nicht antworten. Alle verfügbaren API-Schlüssel sind derzeit überlastet oder erschöpft. Bitte versuchen Sie es gleich ještě einmal."
     }
 }
 
@@ -262,7 +262,7 @@ if prompt := st.chat_input(current_lang["placeholder"]):
         try:
             client, _ = get_gemini_client()
             if client:
-                # OPRAVA 1: Vypnutí AFC pomocí slovníku
+                # Vypnutí AFC pomocí validního slovníku
                 resp = client.models.generate_content(
                     model="gemini-2.5-flash", 
                     contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt.",
@@ -288,46 +288,39 @@ if prompt := st.chat_input(current_lang["placeholder"]):
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
+                # Pokud už v poolu nezbývá žádný funkční klíč
                 if not client:
                     st.warning(current_lang["error_api"])
                     st.stop()
                 
-                key_attempts = 0
-                key_success = False
-                
-                while key_attempts < 5 and not key_success:
-                    try:
-                        # OPRAVA 2: Vypnutí AFC pomocí slovníku v konfiguraci relace
-                        chat_session = client.chats.create(
-                            model="gemini-2.5-flash",
-                            history=active_chat["api_history"],
-                            config=types.GenerateContentConfig(
-                                system_instruction=SYSTEM_PROMPT,
-                                automatic_function_calling={"disable": True}  # <--- TOTO ZASTAVÍ RYCHLÝ SPAM GOOGLU
-                            )
+                try:
+                    # Inicializace chat session s vypnutým AFC
+                    chat_session = client.chats.create(
+                        model="gemini-2.5-flash",
+                        history=active_chat["api_history"],
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            automatic_function_calling={"disable": True}
                         )
-                        
-                        resp = chat_session.send_message(prompt)
-                        full_text = resp.text
-                        
-                        active_chat["api_history"] = chat_session.get_history()
-                        active_chat["history"].append({"role": "assistant", "content": full_text})
-                        st.markdown(full_text)
-                        
-                        key_success = True
-                        success = True  
-                        
-                    except Exception as e:
-                        err_msg = str(e)
-                        if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
-                            key_attempts += 1
-                            if key_attempts < 5:
-                                # Teď už to počká poctivých 4 sekundy bez vnitřního spamu knihovny
-                                time.sleep(4)
-                            else:
-                                failed_keys.append(current_key)
-                        else:
-                            st.error(f"Error: {e}")
-                            st.stop()
+                    )
+                    
+                    resp = chat_session.send_message(prompt)
+                    full_text = resp.text
+                    
+                    active_chat["api_history"] = chat_session.get_history()
+                    active_chat["history"].append({"role": "assistant", "content": full_text})
+                    st.markdown(full_text)
+                    
+                    success = True  # Ukončí cyklus, vše proběhlo v pořádku
+                    
+                except Exception as e:
+                    err_msg = str(e).upper()
+                    # Pokud klíč dostane limit nebo servery haprují, okamžitě ho zablokujeme a jedeme dál
+                    if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "QUOTA_EXCEEDED"]):
+                        failed_keys.append(current_key)
+                    else:
+                        # Pokud nastane jiná (vývojová) chyba, vypíše se, abyste viděli co upravit, a zkusí se další klíč
+                        st.error(f"Neočekávaná chyba u klíče: {e}")
+                        failed_keys.append(current_key)
             
     st.rerun()
