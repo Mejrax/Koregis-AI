@@ -3,129 +3,102 @@ import google.genai as genai
 from PIL import Image
 import os
 
-# 1. Konfigurace stránky na široké zobrazení + skrytí standardních prvků Streamlitu
-st.set_page_config(page_title="Koregis AI", page_icon="💬", layout="wide")
+# 1. Konfigurace stránky
+st.set_page_config(page_title="Koregis", page_icon="💬", layout="wide")
 
-# Vynucení moderního čistého stylu pomocí CSS (zakulacení oken, čisté barvy)
+# CSS pro moderní minimalistický design
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
-    .stButton>button { border-radius: 20px; width: 100%; font-weight: 500; }
+    .stButton>button { border-radius: 10px; width: 100%; text-align: left; border: none; background-color: transparent; }
+    .stButton>button:hover { background-color: #eef1f6; }
     div[data-testid="stChatInput"] { border-radius: 30px; }
     </style>
 """, unsafe_allow_html=True)
 
-# Načtení tvého vlastního loga ze složky na GitHubu
+# Načtení loga
 logo_path = "koregis_logo.png"
-if os.path.exists(logo_path):
-    bot_avatar = Image.open(logo_path)
-else:
-    bot_avatar = "💬"
+bot_avatar = Image.open(logo_path) if os.path.exists(logo_path) else "💬"
 
-# --- LEVÝ SIDEBAR (PŘESNĚ PODLE GEMINI) ---
-# Horní část: Nový chat
-if st.sidebar.button("➕ New Chat", type="secondary"):
-    if "chats_dict" in st.session_state and len(st.session_state.chats_dict) < 5:
-        new_id = len(st.session_state.chats_dict) + 1
-        st.session_state.chats_dict[f"Chat {new_id}"] = []
-        st.session_state.current_chat = f"Chat {new_id}"
-        st.rerun()
-    elif "chats_dict" in st.session_state:
-        st.sidebar.warning("Max 5 chats reached!")
+# --- SIDEBAR ---
+col_logo, col_title = st.sidebar.columns([1, 4])
+with col_logo:
+    if os.path.exists(logo_path): st.image(bot_avatar, width=32)
+with col_title:
+    st.markdown("<h3 style='margin:0; font-weight: 500;'>Koregis</h3>", unsafe_allow_html=True)
 
-st.sidebar.write("---")
-st.sidebar.markdown("### 📂 Recent")
+st.sidebar.write("<br>", unsafe_allow_html=True)
 
-# Inicializace paměti chatů
-if "chats_dict" not in st.session_state:
-    st.session_state.chats_dict = {"Chat 1": []}
+# Inicializace stavu
+if "chats" not in st.session_state:
+    st.session_state.chats = {"Chat 1": {"history": [], "raw": []}}
 if "current_chat" not in st.session_state:
     st.session_state.current_chat = "Chat 1"
 
-# Seznam chatů (max 5) v historii sidebaru
-for chat_name in list(st.session_state.chats_dict.keys()):
-    is_active = chat_name == st.session_state.current_chat
-    btn_type = "primary" if is_active else "secondary"
-    if st.sidebar.button(f"💬 {chat_name}", key=f"side_{chat_name}", type=btn_type):
+if st.sidebar.button("➕ New Chat"):
+    new_id = len(st.session_state.chats) + 1
+    new_name = f"Chat {new_id}"
+    st.session_state.chats[new_name] = {"history": [], "raw": []}
+    st.session_state.current_chat = new_name
+    st.rerun()
+
+st.sidebar.write("---")
+for chat_name in st.session_state.chats.keys():
+    if st.sidebar.button(chat_name, key=chat_name):
         st.session_state.current_chat = chat_name
         st.rerun()
 
-# Spodní část sidebaru: Profil stvořitele
-st.sidebar.markdown("<div style='position: fixed; bottom: 20px;'>", unsafe_allow_html=True)
-st.sidebar.write("---")
-col_user_ico, col_user_name = st.sidebar.columns([1, 4])
-with col_user_ico:
-    st.markdown("<h3 style='margin:0;'>👤</h3>", unsafe_allow_html=True)
-with col_user_name:
-    st.markdown("**MEJRAX**\n<small>Creator & Developer</small>", unsafe_allow_html=True)
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
-
-
-# --- AI CONFIG & SECRETS ---
-if "GEMINI_API_KEY" in st.secrets:
-    MOJE_API_KLIC = st.secrets["GEMINI_API_KEY"]
-else:
-    st.error("Missing GEMINI_API_KEY in Streamlit Secrets!")
+# --- AI CONFIG ---
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("Missing GEMINI_API_KEY")
     st.stop()
 
-if "client" not in st.session_state:
-    st.session_state.client = genai.Client(api_key=MOJE_API_KLIC)
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-instrukce_pro_bota = """
-Jmenuješ se Koregis. Jsi přátelský, inteligentní a neformální AI asistent.
-TVŮJ STVOŘITEL: Tvým jediným stvořitelem a šéfem je Mejrax. Odpovídej vždy v jazyce uživatele.
-Máš přístup na internet přes Google vyhledávač, vyhledej si info vždy, když se tě někdo ptá na novinky.
-"""
+# --- HLAVNÍ CHAT ---
+active_chat = st.session_state.chats[st.session_state.current_chat]
 
-if "gemini_chat" not in st.session_state:
-    st.session_state.gemini_chat = st.session_state.client.chats.create_chat(
-        model="gemini-2.5-flash",
-        config=genai.types.GenerateContentConfig(
-            system_instruction=instrukce_pro_bota,
-            tools=[{"google_search": {}}]
-        )
-    )
+if len(active_chat["history"]) == 0:
+    st.markdown("<br><br><h1 style='text-align:center; font-weight:400;'>Let's do this</h1>", unsafe_allow_html=True)
 
-# --- HLAVNÍ OBRAZOVKA (GEMINI STYLE) ---
-active_messages = st.session_state.chats_dict[st.session_state.current_chat]
+for msg in active_chat["history"]:
+    avatar = bot_avatar if msg["role"] == "assistant" else "👤"
+    with st.chat_message(msg["role"], avatar=avatar):
+        st.markdown(msg["content"])
 
-# POKUD JE CHAT PRÁZDNÝ -> Zobrazí se vycentrované Gemini uvítání bez jména
-if len(active_messages) == 0:
-    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; font-size: 3.5rem; font-weight: 400; color: #1e1e1e;'>Let's do this</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #444746; font-size: 1.2rem;'>Koregis AI is ready. How can I help you today?</p>", unsafe_allow_html=True)
-    st.markdown("<br><br>", unsafe_allow_html=True)
-
-# POKUD UŽ CHAT BĚŽÍ -> Vykreslí se historie zpráv
-else:
-    for message in active_messages:
-        current_avatar = bot_avatar if message["role"] == "assistant" else "👤"
-        with st.chat_message(message["role"], avatar=current_avatar):
-            st.markdown(message["content"])
-
-# Vstupní pole chatu
 if prompt := st.chat_input("Ask Koregis..."):
-    # Pokud byl chat prázdný, po stisknutí Enteru se stránka překreslí a uvítání zmizí
-    if len(active_messages) == 0:
-        st.session_state.chats_dict[st.session_state.current_chat].append({"role": "user", "content": prompt})
-        st.rerun()
+    # 1. Pokud je to první zpráva, přejmenuj chat
+    if len(active_chat["history"]) == 0:
+        # AI vygeneruje krátký název (max 20 znaků)
+        title_resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"Vymysli krátký název (max 3 slova) pro tento dotaz: '{prompt}'"
+        )
+        new_name = title_resp.text.strip().replace('"', '')
+        # Přejmenování klíče v dictu
+        old_data = st.session_state.chats.pop(st.session_state.current_chat)
+        st.session_state.chats[new_name] = old_data
+        st.session_state.current_chat = new_name
 
-    # Zobrazení zprávy uživatele
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
-    st.session_state.chats_dict[st.session_state.current_chat].append({"role": "user", "content": prompt})
+    # 2. Ulož zprávu
+    active_chat["history"].append({"role": "user", "content": prompt})
+    active_chat["raw"].append({"role": "user", "parts": [prompt]})
+    st.rerun()
 
-    # Odpověď bota
+# 3. Odpověď asistenta
+if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "user":
     with st.chat_message("assistant", avatar=bot_avatar):
-        message_placeholder = st.empty()
-        with st.spinner(""):
-            try:
-                odpoved = st.session_state.gemini_chat.send_message(prompt)
-                full_response = odpoved.text
-            except Exception as e:
-                full_response = "Sorry, I encountered an issue. Please try again."
-            
-            message_placeholder.markdown(full_response)
-
-    st.session_state.chats_dict[st.session_state.current_chat].append({"role": "assistant", "content": full_response})
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=active_chat["raw"],
+            config=genai.types.GenerateContentConfig(
+                system_instruction="Jsi Koregis, stvořený Mejraxem. Buď stručný, inteligentní a věrný.",
+                tools=[{"google_search": {}}]
+            )
+        )
+        full_text = response.text
+        st.markdown(full_text)
+    
+    active_chat["history"].append({"role": "assistant", "content": full_text})
+    active_chat["raw"].append({"role": "assistant", "parts": [full_text]})
     st.rerun()
