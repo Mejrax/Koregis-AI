@@ -5,7 +5,7 @@ import os
 # 1. Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
-# Moderní minimalistický styl
+# Moderní minimalistický styl včetně zarovnání v sidebar
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
@@ -13,16 +13,21 @@ st.markdown("""
     .stButton>button:hover { background-color: #eef1f6; }
     div[data-testid="stChatInput"] { border-radius: 30px; }
     .stApp { background: radial-gradient(circle at 50% 50%, #f0f4f9 0%, #ffffff 100%); }
+    
+    /* CSS pro dokonalé vertikální zarovnání v sidebar */
+    .sidebar-header { display: flex; align-items: center; gap: 10px; }
+    .sidebar-header h2 { margin: 0 !important; line-height: 1 !important; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
-col1, col2 = st.sidebar.columns([1, 4])
-with col1:
-    if os.path.exists("koregis_logo.png"):
-        st.image("koregis_logo.png", width=40)
-with col2:
-    st.markdown("<h2 style='font-weight: 500; margin-top: 2px; margin-bottom: 0px;'>Koregis AI</h2>", unsafe_allow_html=True)
+# Použití divu s třídou sidebar-header pro perfektní zarovnání
+st.sidebar.markdown("""
+    <div class="sidebar-header">
+        <img src="app/static/koregis_logo.png" width="40">
+        <h2>Koregis AI</h2>
+    </div>
+""", unsafe_allow_html=True)
 
 st.sidebar.write("<br>", unsafe_allow_html=True)
 
