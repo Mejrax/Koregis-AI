@@ -4,22 +4,14 @@ import os
 
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
-# CSS pro čistý vzhled
+# CSS pro vzhled
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
-    /* Styl pro tlačítko New Chat */
-    div.stButton > button {
-        background-color: transparent;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        color: #444;
-        width: 100%;
-        padding: 0.5rem;
-    }
-    div.stButton > button:hover { background-color: #f0f0f0; border-color: #ccc; }
-    /* Sjednocení chatu */
-    .stChatMessage { padding: 1rem; }
+    .stApp { background-color: #ffffff; }
+    /* Posunutí textu výše */
+    .main-header { margin-top: -50px; text-align: center; font-weight: 400; color: #444; }
+    div[data-testid="stChatInput"] { border-radius: 8px; border: 1px solid #e0e0e0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -53,51 +45,58 @@ for chat_name in list(st.session_state.chats.keys()):
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 # --- HLAVNÍ ČÁST ---
+# Zobrazení banneru a textu
 if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    st.markdown("<h1 style='text-align:center;'>How can I help you today?</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>How can I help you today?</h1>", unsafe_allow_html=True)
 
+# Vykreslení historie, pokud je chat vybrán
 if st.session_state.current_chat:
     active_chat = st.session_state.chats[st.session_state.current_chat]
-    
-    # Vykreslení historie
     for msg in active_chat["history"]:
-        # U uživatele avatar=None (žádný znak), u asistenta logo
         avatar = "koregis_logo.png" if (msg["role"] == "assistant" and os.path.exists("koregis_logo.png")) else None
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
 
-    # Vstupní pole
-    if prompt := st.chat_input("Ask Koregis..."):
-        # Změna názvu chatu
-        if len(active_chat["history"]) == 0:
-            try:
-                name_resp = client.models.generate_content(model="gemini-2.5-flash", contents=f"Název pro: '{prompt}' (max 3 slova).")
-                new_title = name_resp.text.strip().replace('"', '')
-                st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
-                st.session_state.current_chat = new_title
-                active_chat = st.session_state.chats[new_title]
-            except: pass
+# Vstupní pole - viditelné vždy
+if prompt := st.chat_input("Ask Koregis..."):
+    if st.session_state.current_chat is None:
+        st.session_state.current_chat = "Temporary"
+        st.session_state.chats["Temporary"] = {"history": [], "raw": []}
+    
+    active_chat = st.session_state.chats[st.session_state.current_chat]
+    
+    # Automatické pojmenování chatu
+    if len(active_chat["history"]) == 0:
+        try:
+            name_resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"Název pro: '{prompt}' (max 3 slova). Jen název."
+            )
+            new_title = name_resp.text.strip().replace('"', '')
+            st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
+            st.session_state.current_chat = new_title
+            active_chat = st.session_state.chats[new_title]
+        except Exception:
+            pass
 
-        active_chat["history"].append({"role": "user", "content": prompt})
-        active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
-        
-        st.rerun()
-
-    # Logika odpovědi (opravený except blok)
-    if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "user":
-        with st.chat_message("assistant", avatar="koregis_logo.png" if os.path.exists("koregis_logo.png") else None):
-            try:
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=active_chat["raw"],
-                    config={"system_instruction": "You are Koregis AI, created by Mejrax. You are intelligent, faithful, and you communicate fluently in all languages."}
-                )
-                full_text = response.text
-                active_chat["history"].append({"role": "assistant", "content": full_text})
-                active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
-                st.markdown(full_text)
-            except Exception as e:
-                st.error("Error: Could not retrieve response.")
+    active_chat["history"].append({"role": "user", "content": prompt})
+    active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
+    
+    # Odeslání do AI
+    with st.chat_message("assistant", avatar="koregis_logo.png" if os.path.exists("koregis_logo.png") else None):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=active_chat["raw"],
+                config={"system_instruction": "You are Koregis AI, created by Mejrax. Intelligent, faithful, multilingual."}
+            )
+            full_text = response.text
+            active_chat["history"].append({"role": "assistant", "content": full_text})
+            active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
+            st.markdown(full_text)
+        except Exception as e:
+            st.error("Error: Could not retrieve response.")
+    st.rerun()
