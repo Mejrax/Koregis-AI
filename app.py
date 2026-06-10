@@ -94,13 +94,11 @@ if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "us
             full_text = response.text
             active_chat["history"].append({"role": "assistant", "content": full_text})
             active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
-        except Exception as e:
-            st.error(f"Error: {e}")
-            full_text = "Sorry, I encountered an issue."
-        st.markdown(full_text)
-    st.rerun()
+except Exception as e:
             st.error(f"Error: {e}")
             full_text = "Sorry, I encountered an issue."
         
+        st.markdown(full_text)
+    st.rerun()
         st.markdown(full_text)
     st.rerun()
