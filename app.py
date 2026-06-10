@@ -5,7 +5,7 @@ import os
 # 1. Konfigurace stránky
 st.set_page_config(page_title="Koregis", page_icon="🤖", layout="wide")
 
-# Moderní minimalistický styl
+# Moderní minimalistický styl s jemným přechodem
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
@@ -56,8 +56,10 @@ if len(active_chat["history"]) == 0:
         st.image("koregis_banner.png", use_container_width=True)
     st.markdown("<h2 style='text-align:center; font-weight:400; color: #444;'>Jak ti dnes můžu pomoci, MEJRAX?</h2>", unsafe_allow_html=True)
 
+# Vykreslení historie
 for msg in active_chat["history"]:
-    avatar = "🤖" if msg["role"] == "assistant" else "👤"
+    # Místo robota použijeme logo, pokud existuje
+    avatar = "koregis_logo.png" if (msg["role"] == "assistant" and os.path.exists("koregis_logo.png")) else ("🤖" if msg["role"] == "assistant" else "👤")
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -81,7 +83,8 @@ if prompt := st.chat_input("Ask Koregis..."):
 
 # 2. Odpověď asistenta
 if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "user":
-    with st.chat_message("assistant", avatar="🤖"):
+    avatar = "koregis_logo.png" if os.path.exists("koregis_logo.png") else "🤖"
+    with st.chat_message("assistant", avatar=avatar):
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
