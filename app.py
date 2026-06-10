@@ -262,7 +262,6 @@ if prompt := st.chat_input(current_lang["placeholder"]):
         try:
             client, _ = get_gemini_client()
             if client:
-                # OPRAVENO: Správný formát konfigurace pro automatické generování názvu chatu
                 resp = client.models.generate_content(
                     model="gemini-2.5-flash", 
                     contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt.",
@@ -286,17 +285,20 @@ if prompt := st.chat_input(current_lang["placeholder"]):
             failed_keys = []  
             success = False
             full_text = ""
+            debug_errors = [] # Sběr chyb pro debugování
             
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
-                # Pokud už v poolu nezbývá žádný funkční klíč
                 if not client:
                     st.warning(current_lang["error_api"])
+                    # DEBUG VÝPIS: Ukáže vývojáři přesný seznam chyb, proč klíče padly
+                    with st.expander("⚙️ Diagnostika chyb API pro vývojáře"):
+                        for err in debug_errors:
+                            st.code(err)
                     st.stop()
                 
                 try:
-                    # OPRAVENO: Správný konfigurační objekt přes Pydantic pro chat_session
                     chat_session = client.chats.create(
                         model="gemini-2.5-flash",
                         history=active_chat["api_history"],
@@ -313,25 +315,14 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                     active_chat["history"].append({"role": "assistant", "content": full_text})
                     st.markdown(full_text)
                     
-                    success = True  # Ukončí cyklus, vše proběhlo v pořádku
+                    success = True  
                     
                 except Exception as e:
-                    err_msg = str(e).upper()
+                    err_msg = str(e)
+                    # Uložíme si zkrácenou verzi klíče a chybu pro analýzu
+                    key_preview = f"...{current_key[-6:]}" if current_key else "Neznámý"
+                    debug_errors.append(f"Klíč ({key_preview}) selhal s chybou: {err_msg}")
                     
-                    # Pokud se jedná o bezpečnostní stopku (Safety), model odmítne odpovědět, ale kód kvůli tomu nesmí zahodit klíč!
-                    if "SAFETY" in err_msg or "BLOCKED" in err_msg:
-                        st.error("⚠️ Zpráva byla zablokována bezpečnostními filtry Google Gemini API.")
-                        # Přidáme aspoň zprávu do historie, aby se aplikace nezasekla
-                        active_chat["history"].append({"role": "assistant", "content": "Zpráva zablokována bezpečnostní pojistkou."})
-                        success = True
-                    
-                    # Pokud klíč dostane reálný limit (přetížení), okamžitě ho zablokujeme a jedeme na další klíč
-                    elif any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "QUOTA_EXCEEDED"]):
-                        failed_keys.append(current_key)
-                        
-                    else:
-                        # Pokud nastane jakákoliv jiná neočekávaná chyba, vypíšeme ji a zkusíme jiný klíč
-                        st.error(f"Chyba API u klíče: {e}")
-                        failed_keys.append(current_key)
+                    failed_keys.append(current_key)
             
     st.rerun()
