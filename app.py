@@ -2,7 +2,7 @@ import streamlit as st
 import google.genai as genai
 import os
 
-# 1. Konfigurace stránky - logo jako ikona
+# 1. Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
 # Moderní minimalistický styl
@@ -17,7 +17,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
-# Logo a název v sidebar
 col1, col2 = st.sidebar.columns([1, 4])
 with col1:
     if os.path.exists("koregis_logo.png"):
@@ -52,10 +51,10 @@ client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 # --- HLAVNÍ CHAT ---
 if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
-    # Zobrazení banneru
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    st.markdown("<h2 style='text-align:center; font-weight:400; color: #444;'>How can I help you today, MEJRAX?</h2>", unsafe_allow_html=True)
+    # Čistý text bez Mejrax
+    st.markdown("<h1 style='text-align:center; font-weight:400; color: #444;'>How can I help you today?</h1>", unsafe_allow_html=True)
 else:
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
