@@ -4,18 +4,19 @@ import os
 
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
 
-# CSS pro vzhled
+# CSS pro čistý vzhled a ikonu tužky
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
     .stApp { background-color: #ffffff; }
-    /* Posunutí textu výše */
-    .main-header { margin-top: -50px; text-align: center; font-weight: 400; color: #444; }
-    div[data-testid="stChatInput"] { border-radius: 8px; border: 1px solid #e0e0e0; }
+    /* Styl pro Nový chat */
+    .new-chat-btn { cursor: pointer; color: #000; font-weight: 500; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .new-chat-btn:hover { color: #555; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
+# Logo a název
 col1, col2 = st.sidebar.columns([1, 4])
 with col1:
     if os.path.exists("koregis_logo.png"):
@@ -23,36 +24,37 @@ with col1:
 with col2:
     st.markdown("## Koregis AI")
 
-if "chats" not in st.session_state:
-    st.session_state.chats = {}
-if "current_chat" not in st.session_state:
-    st.session_state.current_chat = None
-
-if st.sidebar.button("New Chat"):
-    new_id = len(st.session_state.chats) + 1
-    new_name = f"New Chat {new_id}"
+# Tlačítko Nový chat s ikonou tužky
+if st.sidebar.button("✍️ Nový chat"):
+    new_id = len(st.session_state.get("chats", {})) + 1
+    new_name = f"Nový chat {new_id}"
+    if "chats" not in st.session_state: st.session_state.chats = {}
     st.session_state.chats[new_name] = {"history": [], "raw": []}
     st.session_state.current_chat = new_name
     st.rerun()
 
 st.sidebar.write("---")
-for chat_name in list(st.session_state.chats.keys()):
-    if st.sidebar.button(chat_name):
-        st.session_state.current_chat = chat_name
-        st.rerun()
+
+# Seznam chatů
+if "chats" in st.session_state:
+    for chat_name in list(st.session_state.chats.keys()):
+        if st.sidebar.button(chat_name):
+            st.session_state.current_chat = chat_name
+            st.rerun()
 
 # --- AI CONFIG ---
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 # --- HLAVNÍ ČÁST ---
-# Zobrazení banneru a textu
+if "current_chat" not in st.session_state: st.session_state.current_chat = None
+
 if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    st.markdown("<h1 class='main-header'>How can I help you today?</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; font-weight:400; margin-top: -20px;'>How can I help you today?</h1>", unsafe_allow_html=True)
 
-# Vykreslení historie, pokud je chat vybrán
+# Vykreslení chatu
 if st.session_state.current_chat:
     active_chat = st.session_state.chats[st.session_state.current_chat]
     for msg in active_chat["history"]:
@@ -60,32 +62,27 @@ if st.session_state.current_chat:
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
 
-# Vstupní pole - viditelné vždy
+# Vstupní pole
 if prompt := st.chat_input("Ask Koregis..."):
     if st.session_state.current_chat is None:
-        st.session_state.current_chat = "Temporary"
-        st.session_state.chats["Temporary"] = {"history": [], "raw": []}
+        st.session_state.current_chat = "Temp"
+        st.session_state.chats["Temp"] = {"history": [], "raw": []}
     
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
-    # Automatické pojmenování chatu
+    # Automatické pojmenování
     if len(active_chat["history"]) == 0:
         try:
-            name_resp = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=f"Název pro: '{prompt}' (max 3 slova). Jen název."
-            )
+            name_resp = client.models.generate_content(model="gemini-2.5-flash", contents=f"Název pro: '{prompt}' (max 3 slova).")
             new_title = name_resp.text.strip().replace('"', '')
             st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
             st.session_state.current_chat = new_title
             active_chat = st.session_state.chats[new_title]
-        except Exception:
-            pass
+        except: pass
 
     active_chat["history"].append({"role": "user", "content": prompt})
     active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
     
-    # Odeslání do AI
     with st.chat_message("assistant", avatar="koregis_logo.png" if os.path.exists("koregis_logo.png") else None):
         try:
             response = client.models.generate_content(
@@ -97,6 +94,5 @@ if prompt := st.chat_input("Ask Koregis..."):
             active_chat["history"].append({"role": "assistant", "content": full_text})
             active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
             st.markdown(full_text)
-        except Exception as e:
-            st.error("Error: Could not retrieve response.")
+        except: st.error("Chyba při komunikaci.")
     st.rerun()
