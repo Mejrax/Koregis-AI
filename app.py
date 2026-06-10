@@ -4,7 +4,6 @@ import os
 import base64
 import random
 import time
-from streamlit_javascript import st_javascript
 
 # Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
@@ -12,15 +11,13 @@ st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout
 # Transparentní 1x1 px PNG pro skrytí uživatelského avataru
 BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
-# --- AUTOMATICKÁ DETEKCE JAZYKA PROHLÍŽEČE ---
-# Vytáhne kód jazyka (např. "cs", "sk", "en", "de")
-user_lang_code = st_javascript("navigator.language || navigator.userLanguage")
-
-# Pokud se JavaScript ještě nenačetl, dáme jako výchozí angličtinu
-if not user_lang_code or user_lang_code == 0:
+# --- AUTOMATICKÁ DETEKCE JAZYKA PŘES HLAVIČKY PROHLÍŽEČE ---
+try:
+    # Streamlit vytáhne jazyk přímo z prohlížeče (např. "cs-CZ,cs;q=0.9...")
+    accept_language = st.context.headers.get("Accept-Language", "en")
+    user_lang = accept_language.split(",")[0].split("-")[0].lower().strip()
+except:
     user_lang = "en"
-else:
-    user_lang = str(user_lang_code).lower()[:2] # Vezme první dvě písmena (např. "sk-SK" -> "sk")
 
 # --- SLOVNÍK PRO DYNAMICKÉ PŘEKLADY WEBU ---
 LANG_DICT = {
@@ -62,7 +59,7 @@ LANG_DICT = {
     }
 }
 
-# Pokud jazyk uživatele nemáme ve slovníku, přepneme na univerzální angličtinu
+# Pokud jazyk v seznamu nemáme, skočí jako základní angličtina
 current_lang = LANG_DICT.get(user_lang, LANG_DICT["en"])
 
 # --- DYNAMICKÝ SYSTEM PROMPT PODLE JAZYKA UŽIVATELE ---
@@ -181,7 +178,7 @@ with st.sidebar:
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
     st.markdown(header_html, unsafe_allow_html=True)
 
-    # Dynamický text tlačítka Nový chat podle jazyka
+    # Tlačítko přeložené podle jazyka uživatele
     if st.button(current_lang["new_chat"]):
         new_id = len(st.session_state.chats) + 1
         new_name = f"Chat {new_id}"
@@ -196,7 +193,7 @@ with st.sidebar:
             st.session_state.current_chat = chat_name
             st.rerun()
 
-    # Patička
+    # Patička s logem a informacemi
     footer_html = '<div class="sidebar-footer-container">'
     footer_html += '<div class="footer-line"></div>'
     footer_html += '<div class="footer-dev-row">'
@@ -212,7 +209,7 @@ with st.sidebar:
     st.markdown(footer_html, unsafe_allow_html=True)
 
 
-# --- ROTACE KLÍČŮ ---
+# --- HLAVNÍ FUNKCE PRO ROTACI API KLÍČŮ ---
 def get_gemini_client(exclude_keys=[]):
     raw_keys = st.secrets.get("GEMINI_API_KEYS", st.secrets.get("GEMINI_API_KEY", ""))
     all_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
@@ -250,7 +247,7 @@ else:
             with st.chat_message("user", avatar=BLANK_AVATAR):
                 st.markdown(msg["content"])
 
-# Vstup s lokalizovaným placeholderem
+# Vstupní textové pole s lokalizovaným textem uvnitř
 if prompt := st.chat_input(current_lang["placeholder"]):
     if st.session_state.current_chat is None:
         st.session_state.current_chat = "Temp"
@@ -261,7 +258,7 @@ if prompt := st.chat_input(current_lang["placeholder"]):
     with st.chat_message("user", avatar=BLANK_AVATAR):
         st.markdown(prompt)
         
-    # Automatický název chatu v jazyce uživatele
+    # Automatické pojmenování chatu v jazyce uživatele
     if len(active_chat["history"]) == 0:
         try:
             client, _ = get_gemini_client()
@@ -279,7 +276,7 @@ if prompt := st.chat_input(current_lang["placeholder"]):
 
     active_chat["history"].append({"role": "user", "content": prompt})
 
-    # Generování odpovědi s lokalizovaným spinnerem
+    # Generování odpovědi od AI s lokalizovaným nápisem přemýšlení
     avatar_ai = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
     with st.chat_message("assistant", avatar=avatar_ai):
         with st.spinner(current_lang["thinking"]):
@@ -287,6 +284,7 @@ if prompt := st.chat_input(current_lang["placeholder"]):
             failed_keys = []
             success = False
             
+            # Nekonečná smyčka na pozadí, dokud Google neodpoví
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
@@ -297,6 +295,7 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                 key_attempts = 0
                 key_success = False
                 
+                # Zkusí stávající klíč až 3x s rozestupem 2 sekund
                 while key_attempts < 3 and not key_success:
                     try:
                         chat_session = client.chats.create(
@@ -317,12 +316,13 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                         
                     except Exception as e:
                         err_msg = str(e)
+                        # Pokud je hlášeno přetížení serveru ze strany Googlu (429 nebo 503)
                         if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                             key_attempts += 1
                             if key_attempts < 3:
-                                time.sleep(2)
+                                time.sleep(2) # Počká 2 sekundy před dalším pokusem
                             else:
-                                failed_keys.append(current_key)
+                                failed_keys.append(current_key) # Vyřadí klíč a přejde na další
                         else:
                             st.error(f"Error: {e}")
                             st.stop()
