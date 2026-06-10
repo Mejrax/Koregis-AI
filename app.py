@@ -3,6 +3,8 @@ import google.genai as genai
 import os
 import base64
 import random
+import time
+from streamlit_javascript import st_javascript
 
 # Konfigurace stránky
 st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout="wide")
@@ -10,24 +12,82 @@ st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout
 # Transparentní 1x1 px PNG pro skrytí uživatelského avataru
 BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
+# --- AUTOMATICKÁ DETEKCE JAZYKA PROHLÍŽEČE ---
+# Vytáhne kód jazyka (např. "cs", "sk", "en", "de")
+user_lang_code = st_javascript("navigator.language || navigator.userLanguage")
+
+# Pokud se JavaScript ještě nenačetl, dáme jako výchozí angličtinu
+if not user_lang_code or user_lang_code == 0:
+    user_lang = "en"
+else:
+    user_lang = str(user_lang_code).lower()[:2] # Vezme první dvě písmena (např. "sk-SK" -> "sk")
+
+# --- SLOVNÍK PRO DYNAMICKÉ PŘEKLADY WEBU ---
+LANG_DICT = {
+    "cs": {
+        "welcome_title": "Koregis AI",
+        "welcome_desc": "Oficiální český AI asistent vytvořený vývojářem Mejrax.",
+        "help_text": "Jak vám mohu dnes pomoci?",
+        "placeholder": "Zeptej se Koregise...",
+        "thinking": "Koregis přemýšlí...",
+        "new_chat": "Nový chat",
+        "error_api": "⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu."
+    },
+    "sk": {
+        "welcome_title": "Koregis AI",
+        "welcome_desc": "Oficiálny slovenský AI asistent vytvorený vývojárom Mejrax.",
+        "help_text": "Ako vám môžem dnes pomôcť?",
+        "placeholder": "Spýtaj se Koregisa...",
+        "thinking": "Koregis premýšľa...",
+        "new_chat": "Nový chat",
+        "error_api": "⚠️ Všetky dostupné API kľúče sú momentálne preťažené limitmi alebo majú výpadok u Googlu. Počakaj prosím minútu."
+    },
+    "en": {
+        "welcome_title": "Koregis AI",
+        "welcome_desc": "Official AI assistant created by developer Mejrax.",
+        "help_text": "How can I help you today?",
+        "placeholder": "Ask Koregis...",
+        "thinking": "Koregis is thinking...",
+        "new_chat": "New chat",
+        "error_api": "⚠️ All available API keys are currently exhausted by Google limits or experiencing an outage. Please wait a minute."
+    },
+    "de": {
+        "welcome_title": "Koregis AI",
+        "welcome_desc": "Offizieller AI-Assistent, entwickelt von Mejrax.",
+        "help_text": "Wie kann ich dir heute helfen?",
+        "placeholder": "Frag Koregis...",
+        "thinking": "Koregis denkt nach...",
+        "new_chat": "Neuer Chat",
+        "error_api": "⚠️ Alle verfügbaren API-Schlüssel sind derzeit durch Google-Limits erschöpft oder weisen einen Ausfall auf. Bitte warte eine Minute."
+    }
+}
+
+# Pokud jazyk uživatele nemáme ve slovníku, přepneme na univerzální angličtinu
+current_lang = LANG_DICT.get(user_lang, LANG_DICT["en"])
+
+# --- DYNAMICKÝ SYSTEM PROMPT PODLE JAZYKA UŽIVATELE ---
+SYSTEM_PROMPT = (
+    f"You are Koregis AI, a highly intelligent and omniscient assistant created by Mejrax. "
+    f"The user's preferred language detected from their browser/location is: '{user_lang}'. "
+    f"IMPORTANT: Always communicate and reply fluently in the user's preferred language (or the language they use to text you). "
+    f"You possess vast knowledge about the world and can answer any question. "
+    f"IMPORTANT: You are strictly forbidden from generating, creating, or outputting any images. "
+    f"If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
+)
+
 # --- CSS PRO PERFEKTNÍ POZICOVÁNÍ A VELIKOST ---
 st.markdown("""
     <style>
-    /* Pozadí a ohraničení sidebaru */
     [data-testid="stSidebar"] { 
         background-color: var(--background-color); 
         border-right: 1px solid var(--secondary-background-color);
     }
-
-    /* Design tlačítek v sidebaru */
     .stButton>button { 
         border: 1px solid var(--secondary-background-color); 
         border-radius: 8px; 
         width: 100%; 
         text-align: left; 
     }
-
-    /* Perfektní zarovnání hlavního loga a textu v sidebaru na střed */
     .sidebar-header-container {
         display: flex;
         align-items: center;
@@ -46,8 +106,6 @@ st.markdown("""
         margin: 0 !important; 
         line-height: 1 !important; 
     }
-
-    /* --- ABSOLUTNÍ UKOTVENÍ PATIČKY NA DNĚ SIDEBARU --- */
     .sidebar-footer-container {
         position: fixed;
         bottom: 20px;
@@ -59,13 +117,11 @@ st.markdown("""
         z-index: 100;
         background-color: var(--background-color);
     }
-    
     .footer-line {
         border-top: 1px solid var(--secondary-background-color);
         margin-bottom: 15px;
         opacity: 0.6;
     }
-
     .footer-dev-row {
         display: flex;
         align-items: center;
@@ -92,8 +148,6 @@ st.markdown("""
         font-style: italic;
         padding-left: 2px;
     }
-
-    /* --- SKRYTÍ VOLNÉHO MÍSTA PO UŽIVATELSKÉM AVATARU --- */
     div[data-testid="stChatMessageAvatar"]:has(img[src*="iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"]) {
         display: none !important;
     }
@@ -108,22 +162,12 @@ st.markdown("""
 if "chats" not in st.session_state: st.session_state.chats = {}
 if "current_chat" not in st.session_state: st.session_state.current_chat = None
 
-# --- SYSTEM PROMPT ---
-SYSTEM_PROMPT = (
-    "You are Koregis AI, a highly intelligent and omniscient assistant created by Mejrax. "
-    "You are capable of communicating fluently in any language. "
-    "You possess vast knowledge about the world and can answer any question. "
-    "IMPORTANT: You are strictly forbidden from generating, creating, or outputting any images. "
-    "If asked to generate an image, explain that you are a text-based AI model and cannot perform that task."
-)
-
-# Načtení a zakódování hlavního loga (Koregis AI)
+# Načtení a zakódování log
 logo_base64 = ""
 if os.path.exists("koregis_logo.png"):
     with open("koregis_logo.png", "rb") as image_file:
         logo_base64 = base64.b64encode(image_file.read()).decode()
 
-# Načtení a zakódování loga vývojáře (dev_mejrax.png)
 dev_logo_base64 = ""
 if os.path.exists("dev_mejrax.png"):
     with open("dev_mejrax.png", "rb") as image_file:
@@ -131,15 +175,14 @@ if os.path.exists("dev_mejrax.png"):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # Hlavička sidebaru (Koregis AI)
     header_html = '<div class="sidebar-header-container">'
     if logo_base64:
         header_html += f'<img src="data:image/png;base64,{logo_base64}" class="sidebar-logo">'
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
     st.markdown(header_html, unsafe_allow_html=True)
 
-    # Tlačítko pro nový chat
-    if st.button("Nový chat"):
+    # Dynamický text tlačítka Nový chat podle jazyka
+    if st.button(current_lang["new_chat"]):
         new_id = len(st.session_state.chats) + 1
         new_name = f"Chat {new_id}"
         st.session_state.chats[new_name] = {"history": [], "api_history": []}
@@ -148,13 +191,12 @@ with st.sidebar:
 
     st.write("---")
     
-    # Seznam chatů
     for chat_name in list(st.session_state.chats.keys()):
         if st.button(chat_name, key=chat_name):
             st.session_state.current_chat = chat_name
             st.rerun()
 
-    # --- FIXNÍ PATIČKA ---
+    # Patička
     footer_html = '<div class="sidebar-footer-container">'
     footer_html += '<div class="footer-line"></div>'
     footer_html += '<div class="footer-dev-row">'
@@ -170,13 +212,16 @@ with st.sidebar:
     st.markdown(footer_html, unsafe_allow_html=True)
 
 
-# --- HLAVNÍ FUNKCE PRO ROTACI API KLÍČŮ ---
+# --- ROTACE KLÍČŮ ---
 def get_gemini_client(exclude_keys=[]):
-    """Načte seznam klíčů ze secrets a vybere náhodný, který ještě neselhal."""
     raw_keys = st.secrets.get("GEMINI_API_KEYS", st.secrets.get("GEMINI_API_KEY", ""))
     all_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
     available_keys = [k for k in all_keys if k not in exclude_keys]
     
+    if not available_keys:
+        exclude_keys.clear()
+        available_keys = all_keys
+        
     if not available_keys:
         return None, None
         
@@ -184,17 +229,18 @@ def get_gemini_client(exclude_keys=[]):
     return genai.Client(api_key=chosen_key), chosen_key
 
 
-# --- RENDER STRÁNKY / CHATU ---
+# --- RENDER STRÁNKY S DYNAMICKÝM JAZYKEM ---
 if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    st.markdown("<h1 style='text-align:center;'>Koregis AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; font-size:18px; opacity:0.8;'>Oficiální český AI asistent vytvořený vývojářem Mejrax. Jak vám mohu dnes pomoci?</p>", unsafe_allow_html=True)
+    
+    # Plně lokalizované texty na hlavní obrazovce
+    st.markdown(f"<h1 style='text-align:center;'>{current_lang['welcome_title']}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center; font-size:18px; opacity:0.8;'>{current_lang['welcome_desc']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align:center; font-weight:400; margin-top:20px;'>{current_lang['help_text']}</h3>", unsafe_allow_html=True)
 else:
     active_chat = st.session_state.chats[st.session_state.current_chat]
-    
-    # Zobrazení historie
     for msg in active_chat["history"]:
         if msg["role"] == "assistant":
             avatar = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
@@ -204,24 +250,26 @@ else:
             with st.chat_message("user", avatar=BLANK_AVATAR):
                 st.markdown(msg["content"])
 
-# Vstup od uživatele
-if prompt := st.chat_input("Ask Koregis..."):
+# Vstup s lokalizovaným placeholderem
+if prompt := st.chat_input(current_lang["placeholder"]):
     if st.session_state.current_chat is None:
         st.session_state.current_chat = "Temp"
         st.session_state.chats["Temp"] = {"history": [], "api_history": []}
     
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
-    # Okamžité vykreslení zprávy uživatele na plochu
     with st.chat_message("user", avatar=BLANK_AVATAR):
         st.markdown(prompt)
         
-    # Automatické pojmenování chatu na začátku
+    # Automatický název chatu v jazyce uživatele
     if len(active_chat["history"]) == 0:
         try:
             client, _ = get_gemini_client()
             if client:
-                resp = client.models.generate_content(model="gemini-2.5-flash", contents=f"Name this chat: '{prompt}'. Max 3 words.")
+                resp = client.models.generate_content(
+                    model="gemini-2.5-flash", 
+                    contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt."
+                )
                 new_title = resp.text.strip().replace('"', '')
                 st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
                 st.session_state.current_chat = new_title
@@ -229,17 +277,12 @@ if prompt := st.chat_input("Ask Koregis..."):
         except: 
             pass
 
-    # Uložení zprávy uživatele do paměti aplikace
     active_chat["history"].append({"role": "user", "content": prompt})
 
-    # Výběr textu pro spinner podle přítomnosti české diakritiky
-    czech_chars = set("ěščřžýáíéóúůďťň")
-    thinking_text = "Koregis přemýšlí..." if any(char in czech_chars for char in prompt.lower()) else "Koregis is thinking..."
-
-    # Generování odpovědi od AI
+    # Generování odpovědi s lokalizovaným spinnerem
     avatar_ai = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
     with st.chat_message("assistant", avatar=avatar_ai):
-        with st.spinner(thinking_text):
+        with st.spinner(current_lang["thinking"]):
             
             failed_keys = []
             success = False
@@ -248,32 +291,40 @@ if prompt := st.chat_input("Ask Koregis..."):
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
                 if not client:
-                    st.error("⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu.")
-                    st.stop()
+                    time.sleep(2)
+                    continue
                 
-                try:
-                    chat_session = client.chats.create(
-                        model="gemini-2.5-flash",
-                        history=active_chat["api_history"],
-                        config={"system_instruction": SYSTEM_PROMPT}
-                    )
-                    
-                    resp = chat_session.send_message(prompt)
-                    full_text = resp.text
-                    
-                    active_chat["api_history"] = chat_session.get_history()
-                    active_chat["history"].append({"role": "assistant", "content": full_text})
-                    st.markdown(full_text)
-                    success = True 
-                    
-                except Exception as e:
-                    err_msg = str(e)
-                    # Rotujeme klíč pokud je limit vyčerpán (429) NEBO pokud má Google dočasný výpadek (503 / UNAVAILABLE)
-                    if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "503" in err_msg or "UNAVAILABLE" in err_msg:
-                        failed_keys.append(current_key)
-                    else:
-                        # Pokud je to vyloženě chyba v syntaxi nebo neplatný klíč, teprve tehdy to zastavíme
-                        st.error(f"Chyba API: {e}")
-                        st.stop()
+                key_attempts = 0
+                key_success = False
+                
+                while key_attempts < 3 and not key_success:
+                    try:
+                        chat_session = client.chats.create(
+                            model="gemini-2.5-flash",
+                            history=active_chat["api_history"],
+                            config={"system_instruction": SYSTEM_PROMPT}
+                        )
+                        
+                        resp = chat_session.send_message(prompt)
+                        full_text = resp.text
+                        
+                        active_chat["api_history"] = chat_session.get_history()
+                        active_chat["history"].append({"role": "assistant", "content": full_text})
+                        st.markdown(full_text)
+                        
+                        key_success = True
+                        success = True 
+                        
+                    except Exception as e:
+                        err_msg = str(e)
+                        if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
+                            key_attempts += 1
+                            if key_attempts < 3:
+                                time.sleep(2)
+                            else:
+                                failed_keys.append(current_key)
+                        else:
+                            st.error(f"Error: {e}")
+                            st.stop()
             
     st.rerun()
