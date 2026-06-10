@@ -5,7 +5,7 @@ import os
 # 1. Konfigurace stránky
 st.set_page_config(page_title="Koregis", page_icon="🤖", layout="wide")
 
-# Moderní minimalistický styl s jemným přechodem
+# Moderní minimalistický styl
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
@@ -58,13 +58,12 @@ if len(active_chat["history"]) == 0:
 
 # Vykreslení historie
 for msg in active_chat["history"]:
-    # Místo robota použijeme logo, pokud existuje
     avatar = "koregis_logo.png" if (msg["role"] == "assistant" and os.path.exists("koregis_logo.png")) else ("🤖" if msg["role"] == "assistant" else "👤")
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
+# Vstup uživatele
 if prompt := st.chat_input("Ask Koregis..."):
-    # 1. Přejmenování při první zprávě
     if len(active_chat["history"]) == 0:
         try:
             title_resp = client.models.generate_content(
@@ -81,7 +80,7 @@ if prompt := st.chat_input("Ask Koregis..."):
     active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
     st.rerun()
 
-# 2. Odpověď asistenta
+# Odpověď asistenta
 if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "user":
     avatar = "koregis_logo.png" if os.path.exists("koregis_logo.png") else "🤖"
     with st.chat_message("assistant", avatar=avatar):
@@ -94,11 +93,9 @@ if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "us
             full_text = response.text
             active_chat["history"].append({"role": "assistant", "content": full_text})
             active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
-except Exception as e:
+        except Exception as e:
             st.error(f"Error: {e}")
             full_text = "Sorry, I encountered an issue."
         
-        st.markdown(full_text)
-    st.rerun()
         st.markdown(full_text)
     st.rerun()
