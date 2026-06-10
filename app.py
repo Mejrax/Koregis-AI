@@ -6,7 +6,7 @@ import os
 # 1. Konfigurace stránky
 st.set_page_config(page_title="Koregis", page_icon="💬", layout="wide")
 
-# CSS pro moderní minimalistický design
+# Moderní minimalistický styl
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #f8fafd; }
@@ -50,7 +50,7 @@ for chat_name in st.session_state.chats.keys():
 
 # --- AI CONFIG ---
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Missing GEMINI_API_KEY")
+    st.error("Missing GEMINI_API_KEY in Streamlit Secrets!")
     st.stop()
 
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
@@ -67,38 +67,40 @@ for msg in active_chat["history"]:
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("Ask Koregis..."):
-    # 1. Pokud je to první zpráva, přejmenuj chat
+    # 1. Přejmenování chatu při první zprávě
     if len(active_chat["history"]) == 0:
-        # AI vygeneruje krátký název (max 20 znaků)
-        title_resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"Vymysli krátký název (max 3 slova) pro tento dotaz: '{prompt}'"
-        )
-        new_name = title_resp.text.strip().replace('"', '')
-        # Přejmenování klíče v dictu
-        old_data = st.session_state.chats.pop(st.session_state.current_chat)
-        st.session_state.chats[new_name] = old_data
-        st.session_state.current_chat = new_name
+        try:
+            title_resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"Vymysli krátký název (max 3 slova) pro tento dotaz: '{prompt}'. Odpověz POUZE názvem."
+            )
+            new_name = title_resp.text.strip().replace('"', '').replace("'", "")
+            old_data = st.session_state.chats.pop(st.session_state.current_chat)
+            st.session_state.chats[new_name] = old_data
+            st.session_state.current_chat = new_name
+        except:
+            pass
 
     # 2. Ulož zprávu
     active_chat["history"].append({"role": "user", "content": prompt})
-    active_chat["raw"].append({"role": "user", "parts": [prompt]})
+    active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
     st.rerun()
 
 # 3. Odpověď asistenta
 if len(active_chat["history"]) > 0 and active_chat["history"][-1]["role"] == "user":
     with st.chat_message("assistant", avatar=bot_avatar):
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=active_chat["raw"],
-            config=genai.types.GenerateContentConfig(
-                system_instruction="Jsi Koregis, stvořený Mejraxem. Buď stručný, inteligentní a věrný.",
-                tools=[{"google_search": {}}]
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=active_chat["raw"],
+                config={"system_instruction": "Jsi Koregis, stvořený Mejraxem. Buď stručný, inteligentní a věrný."}
             )
-        )
-        full_text = response.text
+            full_text = response.text
+            active_chat["history"].append({"role": "assistant", "content": full_text})
+            active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
+        except Exception as e:
+            st.error(f"Error: {e}")
+            full_text = "Sorry, I encountered an issue."
+        
         st.markdown(full_text)
-    
-    active_chat["history"].append({"role": "assistant", "content": full_text})
-    active_chat["raw"].append({"role": "assistant", "parts": [full_text]})
     st.rerun()
