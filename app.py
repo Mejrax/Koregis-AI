@@ -262,11 +262,11 @@ if prompt := st.chat_input(current_lang["placeholder"]):
         try:
             client, _ = get_gemini_client()
             if client:
-                # VYPNUTÍ AFC i při pojmenování chatu
+                # OPRAVA 1: Vypnutí AFC pomocí slovníku
                 resp = client.models.generate_content(
                     model="gemini-2.5-flash", 
                     contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt.",
-                    config=types.GenerateContentConfig(automatic_function_calling=False)
+                    config=types.GenerateContentConfig(automatic_function_calling={"disable": True})
                 )
                 new_title = resp.text.strip().replace('"', '')
                 st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
@@ -297,13 +297,13 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                 
                 while key_attempts < 5 and not key_success:
                     try:
-                        # VYPNUTÍ AFC KONFIGURACÍ ZDE
+                        # OPRAVA 2: Vypnutí AFC pomocí slovníku v konfiguraci relace
                         chat_session = client.chats.create(
                             model="gemini-2.5-flash",
                             history=active_chat["api_history"],
                             config=types.GenerateContentConfig(
                                 system_instruction=SYSTEM_PROMPT,
-                                automatic_function_calling=False  # <--- TOTO ZASTAVÍ RYCHLÝ SPAM GOOGLU
+                                automatic_function_calling={"disable": True}  # <--- TOTO ZASTAVÍ RYCHLÝ SPAM GOOGLU
                             )
                         )
                         
