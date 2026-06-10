@@ -10,7 +10,7 @@ st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout
 # Transparentní 1x1 px PNG pro skrytí uživatelského avataru
 BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
-# --- CSS PRO SPRÁVNÝ DARK MODE, ZAROVNÁNÍ A FIXNÍ PATIČKU ---
+# --- CSS PRO SPRÁVNÝ DARK MODE, ZAROVNÁNÍ A FIXNÍ VELKOU PATIČKU ---
 st.markdown("""
     <style>
     /* Pozadí a ohraničení sidebaru */
@@ -19,14 +19,14 @@ st.markdown("""
         border-right: 1px solid var(--secondary-background-color);
     }
     
-    /* Vnitřní kontejner sidebaru, abychom mohli patičku tlačit dolů */
+    /* Vnitřní kontejner sidebaru upravený pro fixní tlačení patičky úplně dolů */
     [data-testid="stSidebarUserContent"] {
         display: flex;
         flex-direction: column;
         height: 100vh;
     }
     
-    /* Tento prvek zabere veškeré volné místo a odtlačí patičku dolů */
+    /* Tento prvek zabere veškeré volné místo a odtlačí patičku na absolutní dno */
     .sidebar-flex-spacer {
         flex-grow: 1;
     }
@@ -39,7 +39,7 @@ st.markdown("""
         text-align: left; 
     }
 
-    /* Perfektní zarovnání loga a textu v sidebaru na střed */
+    /* Perfektní zarovnání hlavního loga a textu v sidebaru na střed */
     .sidebar-header-container {
         display: flex;
         align-items: center;
@@ -59,37 +59,38 @@ st.markdown("""
         line-height: 1 !important; 
     }
 
-    /* --- STYL PRO PATIČKU V LEVÉM DOLNÍM ROHU --- */
+    /* --- NOVÝ STYL PRO VELKOU PATIČKU ÚPLNĚ DOLE --- */
     .sidebar-footer-container {
-        padding-top: 15px;
-        margin-top: 15px;
-        margin-bottom: 30px;
-        padding-left: 5px;
-        font-size: 13px;
+        padding-top: 10px;
+        margin-top: auto; /* Tlačí vyloženě na dno */
+        margin-bottom: 15px; /* Minimální mezera od úplného spodku obrazovky */
+        padding-left: 10px;
+        font-size: 15px; /* Zvětšení základního písma */
         color: var(--text-color);
-        opacity: 0.8;
-        line-height: 1.4;
+        line-height: 1.5;
     }
     .footer-dev-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-        font-weight: 500;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 17px; /* Výraznější jméno developera */
     }
     .footer-dev-logo {
-        width: 18px;
-        height: 18px;
+        width: 24px; /* Zvětšené vývojářské logo */
+        height: 24px;
         object-fit: contain;
         border-radius: 50%;
     }
     .footer-version {
-        font-size: 12px;
-        opacity: 0.6;
+        font-size: 14px; /* Zvětšená verze */
+        opacity: 0.8;
+        font-weight: 500;
     }
     .footer-powered {
-        font-size: 11px;
-        opacity: 0.5;
+        font-size: 12px; /* Zvětšené Powered by */
+        opacity: 0.6;
         font-style: italic;
     }
 
@@ -154,17 +155,16 @@ with st.sidebar:
             st.session_state.current_chat = chat_name
             st.rerun()
 
-    # --- PUSH ELEMENT A PATIČKA ---
+    # --- PRUŽINA PRO ODSTRČENÍ DOLŮ ---
     st.markdown('<div class="sidebar-flex-spacer"></div>', unsafe_allow_html=True)
     st.write("---")
     
-    # Sestavení HTML pro patičku s logem dev_mejrax.png
+    # Sestavení HTML pro výraznější patičku úplně na dně sidebaru
     footer_html = '<div class="sidebar-footer-container">'
     footer_html += '<div class="footer-dev-row">'
     if dev_logo_base64:
         footer_html += f'<img src="data:image/png;base64,{dev_logo_base64}" class="footer-dev-logo">'
     elif logo_base64:
-        # Fallback pokud by dev_mejrax.png chyběl, použije se hlavní logo
         footer_html += f'<img src="data:image/png;base64,{logo_base64}" class="footer-dev-logo">'
     footer_html += 'Developer Mejrax</div>'
     footer_html += '<div class="footer-version">Koregis - 1.0</div>'
