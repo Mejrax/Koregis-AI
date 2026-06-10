@@ -39,22 +39,17 @@ st.markdown("""
     .sidebar-title {
         font-size: 22px;
         font-weight: 600;
-        margin: 0 !important; /* Vynulování defaultního marginu p tagu */
-        line-height: 1 !important; /* Aby text neutíkal nahoru/dolu */
+        margin: 0 !important; 
+        line-height: 1 !important; 
     }
 
-    /* --- SKRYTÍ IKONKY UŽIVATELE --- */
-    /* Streamlit interně označuje zprávy od uživatele atributem ord="1" nebo specifickou strukturou. 
-       Tento selektor bezpečně schová avatar pouze v uživatelských blocích chatu. */
-    [data-testid="stChatMessage"]:nth-child(even) [data-testid="stChatMessageAvatar"] {
-        /* Pokud by se schovávaly obě ikonky, odkomentuj raději řádek níže, který schová ikonu uživatele dynamicky */
-    }
-    
-    /* Stoprocentní metoda: Najde výchozí lidskou ikonku (uživatele) a skryje ji */
-    div[data-testid="stChatMessage"] svg[viewBox="0 0 24 24"] {
+    /* --- STOPROCENTNÍ SKRYTÍ IKONKY UŽIVATELE --- */
+    /* Najde zprávu s avatarém panáčka a schová celý kontejner ikony */
+    [data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatar"]:contains("👤")) div[data-testid="stChatMessageAvatar"] {
         display: none !important;
     }
-    div[data-testid="stChatMessage"]:has(svg[viewBox="0 0 24 24"]) div[data-testid="stChatMessageAvatar"] {
+    /* Fallback pro skrytí prázdného místa */
+    [data-testid="stChatMessage"]:has(span:contains("👤")) div[data-testid="stChatMessageAvatar"] {
         display: none !important;
     }
     </style>
@@ -75,20 +70,15 @@ SYSTEM_PROMPT = (
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # Sestavení HTML pro hlavičku (Logo + Text vedle sebe na střed)
     header_html = '<div class="sidebar-header-container">'
-    
     if os.path.exists("koregis_logo.png"):
         with open("koregis_logo.png", "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode()
         header_html += f'<img src="data:image/png;base64,{encoded_string}" class="sidebar-logo">'
-    
     header_html += '<p class="sidebar-title">Koregis AI</p></div>'
     
-    # Vykreslení hlavičky
     st.markdown(header_html, unsafe_allow_html=True)
 
-    # Tlačítko pro nový chat
     if st.button("Nový chat"):
         new_id = len(st.session_state.chats) + 1
         new_name = f"Chat {new_id}"
@@ -98,7 +88,6 @@ with st.sidebar:
 
     st.write("---")
     
-    # Seznam chatů
     for chat_name in list(st.session_state.chats.keys()):
         if st.button(chat_name, key=chat_name):
             st.session_state.current_chat = chat_name
@@ -115,15 +104,14 @@ if st.session_state.current_chat is None:
 else:
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
-    # Vykreslení historie zpráv ze session_state
+    # Vykreslení historie zpráv
     for msg in active_chat["history"]:
         if msg["role"] == "assistant":
             avatar = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
             with st.chat_message("assistant", avatar=avatar):
                 st.markdown(msg["content"])
         else:
-            # Voláme čistě bez parametru avatar, CSS se postará o schování výchozí ikonky
-            with st.chat_message("user"):
+            with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
 
 # Vstupní pole pro psaní
@@ -134,12 +122,12 @@ if prompt := st.chat_input("Ask Koregis..."):
     
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
-    # Okamžité uložení uživatelské zprávy do historie
+    # Uložení zprávy uživatele
     active_chat["history"].append({"role": "user", "content": prompt})
     active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
     
-    # Vykreslení zprávy uživatele ihned na obrazovku bez avataru v parametru
-    with st.chat_message("user"):
+    # Vykreslení zprávy uživatele ihned na obrazovku
+    with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
         
     # Automatické přejmenování chatu, pokud je to první zpráva
@@ -147,31 +135,37 @@ if prompt := st.chat_input("Ask Koregis..."):
         try:
             resp = client.models.generate_content(model="gemini-2.5-flash", contents=f"Name this chat: '{prompt}'. Max 3 words.")
             new_title = resp.text.strip().replace('"', '')
-            # Přejmenování klíče v dictionary chatu
             st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
             st.session_state.current_chat = new_title
-            # Aktualizace reference na active_chat pod novým jménem
             active_chat = st.session_state.chats[new_title]
-        except Exception as e: 
+        except: 
             pass
 
-    # Generování odpovědi od Koregis AI
+    # Určení jazyka pro hlášku o přemýšlení (detekce české diakritiky)
+    czech_chars = set("ěščřžýáíéóúůďťň")
+    if any(char in czech_chars for char in prompt.lower()):
+        thinking_text = "Koregis přemýšlí..."
+    else:
+        thinking_text = "Koregis is thinking..."
+
+    # Generování odpovědi od Koregis AI s animací přemýšlení
     avatar_ai = "koregis_logo.png" if os.path.exists("koregis_logo.png") else None
     with st.chat_message("assistant", avatar=avatar_ai):
-        try:
-            resp = client.models.generate_content(
-                model="gemini-2.5-flash", 
-                contents=active_chat["raw"], 
-                config={"system_instruction": SYSTEM_PROMPT}
-            )
-            full_text = resp.text
+        with st.spinner(thinking_text):
+            try:
+                resp = client.models.generate_content(
+                    model="gemini-2.5-flash", 
+                    contents=active_chat["raw"], 
+                    config={"system_instruction": SYSTEM_PROMPT}
+                )
+                full_text = resp.text
+                
+                # Uložení odpovědi AI
+                active_chat["history"].append({"role": "assistant", "content": full_text})
+                active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
+                st.markdown(full_text)
+            except Exception as e:
+                st.error("Chyba API.")
             
-            # Uložení odpovědi AI do historie chatu
-            active_chat["history"].append({"role": "assistant", "content": full_text})
-            active_chat["raw"].append({"role": "assistant", "parts": [{"text": full_text}]})
-            st.markdown(full_text)
-        except Exception as e:
-            st.error("Chyba API.")
-            
-    # Znovunačtení stránky, aby se aktualizovalo i menu a rozvržení chatu
+    # Znovunačtení stránky pro kompletní synchronizaci
     st.rerun()
