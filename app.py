@@ -52,12 +52,12 @@ st.markdown("""
         position: fixed;
         bottom: 20px;
         left: 20px;
-        width: 210px; /* Aby text nepřetékal přes okraj sidebaru */
+        width: 210px;
         font-size: 15px;
         color: var(--text-color);
         line-height: 1.5;
         z-index: 100;
-        background-color: var(--background-color); /* Překryje případný scrollující text za tím */
+        background-color: var(--background-color);
     }
     
     .footer-line {
@@ -72,22 +72,22 @@ st.markdown("""
         gap: 10px;
         margin-bottom: 6px;
         font-weight: 600;
-        font-size: 18px; /* Pořádně zvětšené jméno developera */
+        font-size: 18px;
     }
     .footer-dev-logo {
-        width: 26px; /* Větší kulaté logo vývojáře */
+        width: 26px;
         height: 26px;
         object-fit: contain;
         border-radius: 50%;
     }
     .footer-version {
-        font-size: 14px; /* Zvětšený text verze */
+        font-size: 14px;
         opacity: 0.8;
         font-weight: 500;
         padding-left: 2px;
     }
     .footer-powered {
-        font-size: 12px; /* Zvětšené Powered By */
+        font-size: 12px;
         opacity: 0.5;
         font-style: italic;
         padding-left: 2px;
@@ -155,9 +155,8 @@ with st.sidebar:
             st.rerun()
 
     # --- FIXNÍ PATIČKA ---
-    # Sestavení HTML s novou pevnou pozicí na spodku sidebaru
     footer_html = '<div class="sidebar-footer-container">'
-    footer_html += '<div class="footer-line"></div>' # Čára přesunutá dovnitř fixního bloku
+    footer_html += '<div class="footer-line"></div>'
     footer_html += '<div class="footer-dev-row">'
     if dev_logo_base64:
         footer_html += f'<img src="data:image/png;base64,{dev_logo_base64}" class="footer-dev-logo">'
@@ -190,7 +189,8 @@ if st.session_state.current_chat is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     if os.path.exists("koregis_banner.png"):
         st.image("koregis_banner.png", use_container_width=True)
-    st.markdown("<h1 style='text-align:center;'>How can I help you today?</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>Koregis AI</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; font-size:18px; opacity:0.8;'>Oficiální český AI asistent vytvořený vývojářem Mejrax. Jak vám mohu dnes pomoci?</p>", unsafe_allow_html=True)
 else:
     active_chat = st.session_state.chats[st.session_state.current_chat]
     
@@ -248,7 +248,7 @@ if prompt := st.chat_input("Ask Koregis..."):
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
                 if not client:
-                    st.error("⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limitem Googlu. Počkej prosím minutu.")
+                    st.error("⚠️ Všechny dostupné API klíče jsou momentálně přehlcené limity nebo mají výpadek u Googlu. Počkej prosím minutu.")
                     st.stop()
                 
                 try:
@@ -267,9 +267,12 @@ if prompt := st.chat_input("Ask Koregis..."):
                     success = True 
                     
                 except Exception as e:
-                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    err_msg = str(e)
+                    # Rotujeme klíč pokud je limit vyčerpán (429) NEBO pokud má Google dočasný výpadek (503 / UNAVAILABLE)
+                    if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "503" in err_msg or "UNAVAILABLE" in err_msg:
                         failed_keys.append(current_key)
                     else:
+                        # Pokud je to vyloženě chyba v syntaxi nebo neplatný klíč, teprve tehdy to zastavíme
                         st.error(f"Chyba API: {e}")
                         st.stop()
             
