@@ -43,13 +43,18 @@ st.markdown("""
         line-height: 1 !important; /* Aby text neutíkal nahoru/dolu */
     }
 
-    /* Trikové CSS pro úplné skrytí avataru POUZE u uživatele (user) */
-    [data-testid="stChatMessage"] {
-        flex-direction: row;
+    /* --- SKRYTÍ IKONKY UŽIVATELE --- */
+    /* Streamlit interně označuje zprávy od uživatele atributem ord="1" nebo specifickou strukturou. 
+       Tento selektor bezpečně schová avatar pouze v uživatelských blocích chatu. */
+    [data-testid="stChatMessage"]:nth-child(even) [data-testid="stChatMessageAvatar"] {
+        /* Pokud by se schovávaly obě ikonky, odkomentuj raději řádek níže, který schová ikonu uživatele dynamicky */
     }
     
-    /* Když st.chat_message dostane prázdný avatar pro usera, schováme jeho placeholder */
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatar"] span:empty) div[data-testid="stChatMessageAvatar"] {
+    /* Stoprocentní metoda: Najde výchozí lidskou ikonku (uživatele) a skryje ji */
+    div[data-testid="stChatMessage"] svg[viewBox="0 0 24 24"] {
+        display: none !important;
+    }
+    div[data-testid="stChatMessage"]:has(svg[viewBox="0 0 24 24"]) div[data-testid="stChatMessageAvatar"] {
         display: none !important;
     }
     </style>
@@ -117,8 +122,8 @@ else:
             with st.chat_message("assistant", avatar=avatar):
                 st.markdown(msg["content"])
         else:
-            # Předáním mezery do avataru a s pomocí CSS schováme ikonku uživatele
-            with st.chat_message("user", avatar=" "):
+            # Voláme čistě bez parametru avatar, CSS se postará o schování výchozí ikonky
+            with st.chat_message("user"):
                 st.markdown(msg["content"])
 
 # Vstupní pole pro psaní
@@ -133,8 +138,8 @@ if prompt := st.chat_input("Ask Koregis..."):
     active_chat["history"].append({"role": "user", "content": prompt})
     active_chat["raw"].append({"role": "user", "parts": [{"text": prompt}]})
     
-    # Vykreslení zprávy uživatele ihned na obrazovku (aby nečekala na odpověď AI)
-    with st.chat_message("user", avatar=" "):
+    # Vykreslení zprávy uživatele ihned na obrazovku bez avataru v parametru
+    with st.chat_message("user"):
         st.markdown(prompt)
         
     # Automatické přejmenování chatu, pokud je to první zpráva
