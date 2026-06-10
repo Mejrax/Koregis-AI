@@ -1,5 +1,6 @@
 import streamlit as st
 import google.genai as genai
+from google.genai import types  # Import pro konfiguraci vypnutí AFC
 import os
 import base64
 import random
@@ -28,7 +29,7 @@ LANG_DICT = {
         "thinking": "Koregis přemýšlí...",
         "new_chat": "Nový chat",
         "chat_prefix": "Chat",
-        "error_api": "⚠️ Bohužel nemohu odpovědět. Servery jsou momentálně zatížené, chyba není na naší straně. Zkuste to prosím znovu později."
+        "error_api": "⚠️ Bohužel nemohu odpovědět. Servery jsou momentálně zatížené, chyby není na naší straně. Zkuste to prosím znovu později."
     },
     "sk": {
         "welcome_title": "Koregis AI",
@@ -213,7 +214,7 @@ with st.sidebar:
     st.markdown(footer_html, unsafe_allow_html=True)
 
 
-# --- FUNKCE PRO ROTACI API KLÍČŮ (VYBÍRÁ POUZE DOSUD NEVYČERPANÉ KLÍČE) ---
+# --- FUNKCE PRO ROTACI API KLÍČŮ ---
 def get_gemini_client(exclude_keys=[]):
     raw_keys = st.secrets.get("GEMINI_API_KEYS", st.secrets.get("GEMINI_API_KEY", ""))
     all_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
@@ -261,9 +262,11 @@ if prompt := st.chat_input(current_lang["placeholder"]):
         try:
             client, _ = get_gemini_client()
             if client:
+                # VYPNUTÍ AFC i při pojmenování chatu
                 resp = client.models.generate_content(
                     model="gemini-2.5-flash", 
-                    contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt."
+                    contents=f"Name this chat based on prompt: '{prompt}'. Response must be only max 3 words in the language of the prompt.",
+                    config=types.GenerateContentConfig(automatic_function_calling=False)
                 )
                 new_title = resp.text.strip().replace('"', '')
                 st.session_state.chats[new_title] = st.session_state.chats.pop(st.session_state.current_chat)
@@ -278,15 +281,13 @@ if prompt := st.chat_input(current_lang["placeholder"]):
     with st.chat_message("assistant", avatar=avatar_ai):
         with st.spinner(current_lang["thinking"]):
             
-            failed_keys = []  # Seznam klíčů, které totálně selhaly (všech 5 pokusů vyčerpáno)
+            failed_keys = []  
             success = False
             full_text = ""
             
-            # CHYTRÝ ROTATOR S LIMITACÍ 5 POKUSŮ NA JEDNOM API
             while not success:
                 client, current_key = get_gemini_client(exclude_keys=failed_keys)
                 
-                # Pokud už nezbývají ŽÁDNÉ API klíče, které by nebyly vyčerpané
                 if not client:
                     st.warning(current_lang["error_api"])
                     st.stop()
@@ -294,13 +295,16 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                 key_attempts = 0
                 key_success = False
                 
-                # Zkusí to přesně 5x na aktuálním klíči
                 while key_attempts < 5 and not key_success:
                     try:
+                        # VYPNUTÍ AFC KONFIGURACÍ ZDE
                         chat_session = client.chats.create(
                             model="gemini-2.5-flash",
                             history=active_chat["api_history"],
-                            config={"system_instruction": SYSTEM_PROMPT}
+                            config=types.GenerateContentConfig(
+                                system_instruction=SYSTEM_PROMPT,
+                                automatic_function_calling=False  # <--- TOTO ZASTAVÍ RYCHLÝ SPAM GOOGLU
+                            )
                         )
                         
                         resp = chat_session.send_message(prompt)
@@ -311,21 +315,18 @@ if prompt := st.chat_input(current_lang["placeholder"]):
                         st.markdown(full_text)
                         
                         key_success = True
-                        success = True  # Vše proběhlo v pořádku, ukončujeme cykly
+                        success = True  
                         
                     except Exception as e:
                         err_msg = str(e)
-                        # Detekce limitu 15-20 ot./min (chyby 429, RESOURCE_EXHAUSTED apod.)
                         if any(err in err_msg for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                             key_attempts += 1
                             if key_attempts < 5:
-                                # Klíč počká 4 sekundy a zkusí to znova (celkem max 5x)
+                                # Teď už to počká poctivých 4 sekundy bez vnitřního spamu knihovny
                                 time.sleep(4)
                             else:
-                                # Po 5. neúspěšném pokusu klíč zablokujeme pro tento request a smyčka ho přepne na jiný
                                 failed_keys.append(current_key)
                         else:
-                            # Jakákoli jiná kritická chyba (např. špatný formát kódu) aplikaci zastaví
                             st.error(f"Error: {e}")
                             st.stop()
             
