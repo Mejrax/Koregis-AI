@@ -10,25 +10,13 @@ st.set_page_config(page_title="Koregis AI", page_icon="koregis_logo.png", layout
 # Transparentní 1x1 px PNG pro skrytí uživatelského avataru
 BLANK_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
-# --- CSS PRO SPRÁVNÝ DARK MODE, ZAROVNÁNÍ A FIXNÍ VELKOU PATIČKU ---
+# --- CSS PRO PERFEKTNÍ POZICOVÁNÍ A VELIKOST ---
 st.markdown("""
     <style>
     /* Pozadí a ohraničení sidebaru */
     [data-testid="stSidebar"] { 
         background-color: var(--background-color); 
         border-right: 1px solid var(--secondary-background-color);
-    }
-    
-    /* Vnitřní kontejner sidebaru upravený pro fixní tlačení patičky úplně dolů */
-    [data-testid="stSidebarUserContent"] {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-    }
-    
-    /* Tento prvek zabere veškeré volné místo a odtlačí patičku na absolutní dno */
-    .sidebar-flex-spacer {
-        flex-grow: 1;
     }
 
     /* Design tlačítek v sidebaru */
@@ -59,39 +47,50 @@ st.markdown("""
         line-height: 1 !important; 
     }
 
-    /* --- NOVÝ STYL PRO VELKOU PATIČKU ÚPLNĚ DOLE --- */
+    /* --- ABSOLUTNÍ UKOTVENÍ PATIČKY NA DNĚ SIDEBARU --- */
     .sidebar-footer-container {
-        padding-top: 10px;
-        margin-top: auto; /* Tlačí vyloženě na dno */
-        margin-bottom: 15px; /* Minimální mezera od úplného spodku obrazovky */
-        padding-left: 10px;
-        font-size: 15px; /* Zvětšení základního písma */
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        width: 210px; /* Aby text nepřetékal přes okraj sidebaru */
+        font-size: 15px;
         color: var(--text-color);
         line-height: 1.5;
+        z-index: 100;
+        background-color: var(--background-color); /* Překryje případný scrollující text za tím */
     }
+    
+    .footer-line {
+        border-top: 1px solid var(--secondary-background-color);
+        margin-bottom: 15px;
+        opacity: 0.6;
+    }
+
     .footer-dev-row {
         display: flex;
         align-items: center;
         gap: 10px;
         margin-bottom: 6px;
         font-weight: 600;
-        font-size: 17px; /* Výraznější jméno developera */
+        font-size: 18px; /* Pořádně zvětšené jméno developera */
     }
     .footer-dev-logo {
-        width: 24px; /* Zvětšené vývojářské logo */
-        height: 24px;
+        width: 26px; /* Větší kulaté logo vývojáře */
+        height: 26px;
         object-fit: contain;
         border-radius: 50%;
     }
     .footer-version {
-        font-size: 14px; /* Zvětšená verze */
+        font-size: 14px; /* Zvětšený text verze */
         opacity: 0.8;
         font-weight: 500;
+        padding-left: 2px;
     }
     .footer-powered {
-        font-size: 12px; /* Zvětšené Powered by */
-        opacity: 0.6;
+        font-size: 12px; /* Zvětšené Powered By */
+        opacity: 0.5;
         font-style: italic;
+        padding-left: 2px;
     }
 
     /* --- SKRYTÍ VOLNÉHO MÍSTA PO UŽIVATELSKÉM AVATARU --- */
@@ -155,12 +154,10 @@ with st.sidebar:
             st.session_state.current_chat = chat_name
             st.rerun()
 
-    # --- PRUŽINA PRO ODSTRČENÍ DOLŮ ---
-    st.markdown('<div class="sidebar-flex-spacer"></div>', unsafe_allow_html=True)
-    st.write("---")
-    
-    # Sestavení HTML pro výraznější patičku úplně na dně sidebaru
+    # --- FIXNÍ PATIČKA ---
+    # Sestavení HTML s novou pevnou pozicí na spodku sidebaru
     footer_html = '<div class="sidebar-footer-container">'
+    footer_html += '<div class="footer-line"></div>' # Čára přesunutá dovnitř fixního bloku
     footer_html += '<div class="footer-dev-row">'
     if dev_logo_base64:
         footer_html += f'<img src="data:image/png;base64,{dev_logo_base64}" class="footer-dev-logo">'
