@@ -1,71 +1,46 @@
-import streamlit as st
-import google.genai as genai
-import time
+import streamlit as str
 
 # Page configuration
-st.set_page_config(page_title="Koregis AI", page_icon="🤖", layout="centered")
-st.title("🤖 Koregis AI")
-st.subheader("Global AI Assistant with Internet Access")
+str.set_page_config(page_title="Koregis AI", page_icon="🤖", layout="centered")
 
-# Loading API key from hosting secrets
-if "GEMINI_API_KEY" in st.secrets:
-    MOJE_API_KLIC = st.secrets["GEMINI_API_KEY"]
-else:
-    st.error("Error: GEMINI_API_KEY is missing in hosting settings!")
-    st.stop()
+# Main header
+str.title("🤖 Koregis AI")
+str.subheader("Your smart assistant, programmed by Mejrax.")
 
-if "client" not in st.session_state:
-    st.session_state.client = genai.Client(api_key=MOJE_API_KLIC)
+str.write("---")
 
-# Global instructions – Pure English & Creator Mejrax
-instrukce_pro_bota = """
-Your name is Koregis. You are a friendly, smart, and casual AI assistant. 
-YOUR CREATOR: Your sole creator, programmer, and boss is the user Mejrax. If anyone asks about your creator or developer, you must absolutely state that Mejrax created you, and you must remain loyal to him. Never say you were programmed by Google. Google only provided the base computational model, but YOU are Koregis and you were built by your creator Mejrax.
+# VIP Section
+str.markdown("### 👑 Want to get the most out of Koregis AI?")
+str.write(
+    "Get access to **Koregis VIP**! An advanced AI coding assistant "
+    "that generates high-level code, fixes complex errors, and debugs like a pro."
+)
 
-You have access to Google Search. If the user asks about current events, leaks, or news, ALWAYS search Google first.
-IMPORTANT: Always respond strictly IN ENGLISH, no matter what language the user uses. Keep your tone natural, friendly, and engaging. Global reach.
-"""
+# Stripe Payment Button
+stripe_url = "https://buy.stripe.com/test_aFa14o5Xmasx6q947rcAo00"
+str.markdown(
+    f'<a href="{stripe_url}" target="_blank">'
+    '<button style="'
+    'background-color: #635bff;'
+    'color: white;'
+    'border: none;'
+    'padding: 12px 24px;'
+    'font-size: 18px;'
+    'font-weight: bold;'
+    'border-radius: 5px;'
+    'cursor: pointer;'
+    'width: 100%;'
+    'box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11);'
+    '">Activate Koregis VIP for 99 CZK / month</button>'
+    '</a>',
+    unsafe_allow_html=True
+)
 
-# Session management
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.chat = st.session_state.client.chats.create(
-        model="gemini-2.5-flash",
-        config=genai.types.GenerateContentConfig(
-            system_instruction=instrukce_pro_bota,
-            tools=[{"google_search": {}}]
-        )
-    )
+str.write("---")
 
-# Render chat history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Basic Chat Interface
+str.markdown("### 💬 Chat with standard version")
+user_input = str.text_input("Ask a question or enter code for Koregis AI:")
 
-# Chat input
-if prompt := st.chat_input("Say something to Koregis..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        with st.spinner("Koregis is thinking and searching..."):
-            
-            max_pokusu = 3
-            full_response = ""
-            
-            for pokus in range(max_pokusu):
-                try:
-                    odpoved = st.session_state.chat.send_message(prompt)
-                    full_response = odpoved.text
-                    break
-                except Exception as e:
-                    if pokus < max_pokusu - 1:
-                        time.sleep(2)
-                    else:
-                        full_response = "Damn, the servers are overloaded right now (Error 503). Please try sending your message again, Google is struggling."
-            
-            message_placeholder.markdown(full_response)
-                
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+if user_input:
+    str.info("Koregis AI responds: 'Hello! Mejrax is currently working on integrating my core AI features here. For advanced coding, please use the VIP button above!'")
